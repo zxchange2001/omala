@@ -35,6 +35,7 @@ import (
 	"unsafe"
 
 	"github.com/jmorganca/ollama/api"
+	"github.com/jmorganca/ollama/format"
 )
 
 type dynExtServer struct {
@@ -191,12 +192,25 @@ func (llm *dynExtServer) Predict(ctx context.Context, predict PredictOpts, fn fu
 		"penalize_nl":       predict.Options.PenalizeNewline,
 		"seed":              predict.Options.Seed,
 		"stop":              predict.Options.Stop,
+		"grammar":           predict.Options.Grammar,
 		"image_data":        predict.Images,
 		"cache_prompt":      true,
 	}
 
 	if predict.Format == "json" {
-		request["grammar"] = jsonGrammar
+		// If json schema is provided, convert it to a grammar and use that
+		if predict.Options.Schema != "" {
+			if predict.Options.Grammar != "" {
+				return fmt.Errorf("cannot use both a grammar and a json schema, please provide only one")
+			}
+			grammar, err := format.SchemaToGrammar(predict.Options.Schema, nil)
+			if err != nil {
+				return fmt.Errorf("error converting json schema to grammar: %v", err)
+			}
+			request["grammar"] = grammar
+		} else {
+			request["grammar"] = format.JsonGrammar
+		}
 	}
 
 	retryDelay := 100 * time.Microsecond

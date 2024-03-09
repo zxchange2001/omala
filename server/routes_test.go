@@ -27,6 +27,40 @@ func setupServer(t *testing.T) (*Server, error) {
 	return NewServer()
 }
 
+func TestBuildCORSConfig(t *testing.T) {
+	origins := defaultAllowOrigins
+
+	config := BuildCORSConfig(origins)
+
+	expectedOrigins := append(origins,
+		"http://localhost",
+		"https://localhost",
+		"tauri://localhost",
+		"http://localhost:*",
+		"https://localhost:*",
+		"tauri://localhost:*",
+
+		"http://127.0.0.1",
+		"https://127.0.0.1",
+		"tauri://127.0.0.1",
+		"http://127.0.0.1:*",
+		"https://127.0.0.1:*",
+		"tauri://127.0.0.1:*",
+
+		"http://0.0.0.0",
+		"https://0.0.0.0",
+		"tauri://0.0.0.0",
+		"http://0.0.0.0:*",
+		"https://0.0.0.0:*",
+		"tauri://0.0.0.0:*",
+	)
+
+	if !assert.ElementsMatch(t, config.AllowOrigins, expectedOrigins) {
+		t.Errorf("AllowOrigins mismatch.\nExpected: %v\n  Actual: %v", expectedOrigins, config.AllowOrigins)
+	}
+
+}
+
 func Test_Routes(t *testing.T) {
 	type testCase struct {
 		Name     string

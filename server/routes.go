@@ -904,6 +904,12 @@ var defaultAllowOrigins = []string{
 	"0.0.0.0",
 }
 
+var defaultAllowSchemas = []string{
+	"http",
+	"https",
+	"tauri",
+}
+
 func NewServer() (*Server, error) {
 	workDir, err := os.MkdirTemp("", "ollama")
 	if err != nil {
@@ -915,25 +921,31 @@ func NewServer() (*Server, error) {
 	}, nil
 }
 
+func BuildCORSConfig(origins []string) cors.Config {
+	config := cors.DefaultConfig()
+	config.AllowWildcard = true
+	config.AllowBrowserExtensions = true
+	config.CustomSchemas = []string{"tauri"}
+
+	config.AllowOrigins = origins
+	for _, allowOrigin := range defaultAllowOrigins {
+		for _, schema := range defaultAllowSchemas {
+			config.AllowOrigins = append(config.AllowOrigins,
+				fmt.Sprintf("%s://%s", schema, allowOrigin),
+				fmt.Sprintf("%s://%s:*", schema, allowOrigin),
+			)
+		}
+	}
+	return config
+}
+
 func (s *Server) GenerateRoutes() http.Handler {
 	var origins []string
 	if o := os.Getenv("OLLAMA_ORIGINS"); o != "" {
 		origins = strings.Split(o, ",")
 	}
 
-	config := cors.DefaultConfig()
-	config.AllowWildcard = true
-	config.AllowBrowserExtensions = true
-
-	config.AllowOrigins = origins
-	for _, allowOrigin := range defaultAllowOrigins {
-		config.AllowOrigins = append(config.AllowOrigins,
-			fmt.Sprintf("http://%s", allowOrigin),
-			fmt.Sprintf("https://%s", allowOrigin),
-			fmt.Sprintf("http://%s:*", allowOrigin),
-			fmt.Sprintf("https://%s:*", allowOrigin),
-		)
-	}
+	config := BuildCORSConfig(origins)
 
 	r := gin.Default()
 	r.Use(

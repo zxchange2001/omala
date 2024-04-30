@@ -254,47 +254,47 @@ See the [API documentation](./docs/api.md) for all endpoints.
 
 ## Community Integrations
 
-### Web & Desktop
-
-- [Open WebUI](https://github.com/open-webui/open-webui)
-- [Enchanted (macOS native)](https://github.com/AugustDev/enchanted)
+### Web
 - [Lollms-Webui](https://github.com/ParisNeo/lollms-webui)
 - [LibreChat](https://github.com/danny-avila/LibreChat)
 - [Bionic GPT](https://github.com/bionic-gpt/bionic-gpt)
 - [HTML UI](https://github.com/rtcfirefly/ollama-ui)
-- [Saddle](https://github.com/jikkuatwork/saddle)
 - [Chatbot UI](https://github.com/ivanfioravanti/chatbot-ollama)
-- [Chatbot UI v2](https://github.com/mckaywrigley/chatbot-ui)
-- [Typescript UI](https://github.com/ollama-interface/Ollama-Gui?tab=readme-ov-file)
+- [Saddle](https://github.com/jikkuatwork/saddle)
 - [Minimalistic React UI for Ollama Models](https://github.com/richawo/minimal-llm-ui)
-- [Ollamac](https://github.com/kevinhermawan/Ollamac)
+- [Open WebUI](https://github.com/open-webui/open-webui)
 - [big-AGI](https://github.com/enricoros/big-AGI/blob/main/docs/config-local-ollama.md)
 - [Cheshire Cat assistant framework](https://github.com/cheshire-cat-ai/core)
 - [Amica](https://github.com/semperai/amica)
-- [chatd](https://github.com/BruceMacD/chatd)
-- [Ollama-SwiftUI](https://github.com/kghandour/Ollama-SwiftUI)
 - [Dify.AI](https://github.com/langgenius/dify)
-- [MindMac](https://mindmac.app)
 - [NextJS Web Interface for Ollama](https://github.com/jakobhoeg/nextjs-ollama-llm-ui)
-- [Msty](https://msty.app)
-- [Chatbox](https://github.com/Bin-Huang/Chatbox)
-- [WinForm Ollama Copilot](https://github.com/tgraupmann/WinForm_Ollama_Copilot)
 - [NextChat](https://github.com/ChatGPTNextWeb/ChatGPT-Next-Web) with [Get Started Doc](https://docs.nextchat.dev/models/ollama)
 - [Alpaca WebUI](https://github.com/mmo80/alpaca-webui)
-- [OllamaGUI](https://github.com/enoch1118/ollamaGUI)
 - [OpenAOE](https://github.com/InternLM/OpenAOE)
-- [Odin Runes](https://github.com/leonid20000/OdinRunes)
 - [LLM-X: Progressive Web App](https://github.com/mrdjohnson/llm-x)
-- [AnythingLLM (Docker + MacOs/Windows/Linux native app)](https://github.com/Mintplex-Labs/anything-llm)
 - [Ollama Basic Chat: Uses HyperDiv Reactive UI](https://github.com/rapidarchitect/ollama_basic_chat)
 - [Ollama-chats RPG](https://github.com/drazdra/ollama-chats)
-- [QA-Pilot: Chat with Code Repository](https://github.com/reid41/QA-Pilot)
 - [ChatOllama: Open Source Chatbot based on Ollama with Knowledge Bases](https://github.com/sugarforever/chat-ollama)
 - [CRAG Ollama Chat: Simple Web Search with Corrective RAG](https://github.com/Nagi-ovo/CRAG-Ollama-Chat)
 - [RAGFlow: Open-source Retrieval-Augmented Generation engine based on deep document understanding](https://github.com/infiniflow/ragflow)
-- [chat: chat web app for teams](https://github.com/swuecho/chat)
-- [Lobe Chat](https://github.com/lobehub/lobe-chat) with [Integrating Doc](https://lobehub.com/docs/self-hosting/examples/ollama)
-- [Ollama RAG Chatbot: Local Chat with multiples PDFs using Ollama and RAG.](https://github.com/datvodinh/rag-chatbot.git)
+
+### Desktop
+
+| **Name**                                                                                                                       | **Windows** | **Linux** | **Mac** |
+|--------------------------------------------------------------------------------------------------------------------------------|-------------|-----------|---------|
+|                                       [Enchanted](https://github.com/AugustDev/enchanted)                                      |      ❌      |     ❌     |    ✔️    |
+|                                 [Typescript UI](https://github.com/ollama-interface/Ollama-Gui)                                |      ❌      |     ❌     |    ✔️    |
+|                                       [Ollamac](https://github.com/kevinhermawan/Ollamac)                                      |      ❌      |     ❌     |    ✔️    |
+|                                           [chatd](https://github.com/BruceMacD/chatd)                                          |      ✔️      |     ✔️     |    ✔️    |
+|                                  [Ollama-SwiftUI](https://github.com/kghandour/Ollama-SwiftUI)                                 |      ❌      |     ❌     |    ✔️    |
+|                                                 [MindMac](https://mindmac.app)                                                 |      ❌      |     ❌     |    ✔️    |
+|                                                    [Msty](https://msty.app)                                                    |      ✔️      |     ✔️     |    ✔️    |
+|                                         [Chatbox](https://github.com/Bin-Huang/Chatbox)                                        |      ✔️      |     ✔️     |    ✔️    |
+|                         [WinForm Ollama Copilot](https://github.com/tgraupmann/WinForm_Ollama_Copilot)                         |      ✔️      |     ❌     |    ❌    |
+| [NextChat](https://github.com/ChatGPTNextWeb/ChatGPT-Next-Web) with [Get Started Doc](https://docs.nextchat.dev/models/ollama) |      ✔️      |     ✔️     |    ✔️    |
+|                                       [OllamaGUI](https://github.com/enoch1118/ollamaGUI)                                      |      ❌      |     ❌     |    ✔️    |
+|                                     [Odin Runes](https://github.com/leonid20000/OdinRunes)                                     |      ✔️      |     ✔️     |    ✔️    |
+|              [AnythingLLM (Docker+MacOs/Windows/Linux native app)](https://github.com/Mintplex-Labs/anything-llm)              |      ✔️      |     ✔️     |    ✔️    |
 
 ### Terminal
 

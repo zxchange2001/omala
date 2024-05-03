@@ -12,7 +12,11 @@ type Layer struct {
 	Digest    string `json:"digest"`
 	Size      int64  `json:"size"`
 	From      string `json:"from,omitempty"`
-	status    string
+
+	Intermediate bool   `json:"intermediate,omitempty"`
+	MergeBase    string `json:"merge_base,omitempty"`
+
+	message string
 }
 
 func NewLayer(r io.Reader, mediatype string) (*Layer, error) {
@@ -56,7 +60,7 @@ func NewLayer(r io.Reader, mediatype string) (*Layer, error) {
 		MediaType: mediatype,
 		Digest:    digest,
 		Size:      n,
-		status:    fmt.Sprintf("%s %s", status, digest),
+		message:   fmt.Sprintf("%s %s", status, digest),
 	}, nil
 }
 
@@ -76,11 +80,11 @@ func NewLayerFromLayer(digest, mediatype, from string) (*Layer, error) {
 		Digest:    digest,
 		Size:      fi.Size(),
 		From:      from,
-		status:    fmt.Sprintf("using existing layer %s", digest),
+		message:   fmt.Sprintf("using existing layer %s", digest),
 	}, nil
 }
 
-func (l *Layer) Open() (io.ReadCloser, error) {
+func (l *Layer) Open() (*os.File, error) {
 	blob, err := GetBlobsPath(l.Digest)
 	if err != nil {
 		return nil, err

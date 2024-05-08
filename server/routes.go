@@ -1013,6 +1013,13 @@ func Serve(ln net.Listener) error {
 	if err := fixBlobs(blobsDir); err != nil {
 		return err
 	}
+	manifestsDir, err := GetManifestPath()
+	if err != nil {
+		return err
+	}
+	if err := fixManifests(manifestsDir); err != nil {
+		return err
+	}
 
 	if !envconfig.NoPrune {
 		// clean up unused layers and manifests

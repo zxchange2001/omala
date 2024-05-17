@@ -409,12 +409,16 @@ func errFromUnknownKey(unknownKeyErr error) error {
 }
 
 func PushHandler(cmd *cobra.Command, args []string) error {
-	client, err := api.ClientFromEnvironment()
+	insecure, err := cmd.Flags().GetBool("insecure")
+	if err != nil {
+		return err
+	}
+	bandwidth, err := cmd.Flags().GetString("bandwidth")
 	if err != nil {
 		return err
 	}
 
-	insecure, err := cmd.Flags().GetBool("insecure")
+	client, err := api.ClientFromEnvironment()
 	if err != nil {
 		return err
 	}
@@ -453,7 +457,7 @@ func PushHandler(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	request := api.PushRequest{Name: args[0], Insecure: insecure}
+	request := api.PushRequest{Name: args[0], Insecure: insecure, Bandwidth: bandwidth}
 	if err := client.Push(cmd.Context(), &request, fn); err != nil {
 		if spinner != nil {
 			spinner.Stop()
@@ -668,6 +672,10 @@ func PullHandler(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	bandwidth, err := cmd.Flags().GetString("bandwidth")
+	if err != nil {
+		return err
+	}
 
 	client, err := api.ClientFromEnvironment()
 	if err != nil {
@@ -709,7 +717,7 @@ func PullHandler(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	request := api.PullRequest{Name: args[0], Insecure: insecure}
+	request := api.PullRequest{Name: args[0], Insecure: insecure, Bandwidth: bandwidth}
 	if err := client.Pull(cmd.Context(), &request, fn); err != nil {
 		return err
 	}
@@ -1178,6 +1186,7 @@ Environment Variables:
 	}
 
 	pullCmd.Flags().Bool("insecure", false, "Use an insecure registry")
+	pullCmd.Flags().String("bandwidth", "0 KB", "Limit dialer bandwidth (1 MB, 200 KB)")
 
 	pushCmd := &cobra.Command{
 		Use:     "push MODEL",
@@ -1188,6 +1197,7 @@ Environment Variables:
 	}
 
 	pushCmd.Flags().Bool("insecure", false, "Use an insecure registry")
+	pushCmd.Flags().String("bandwidth", "0 KB", "Limit dialer bandwidth (1 MB, 200 KB)")
 
 	listCmd := &cobra.Command{
 		Use:     "list",

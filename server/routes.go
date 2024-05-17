@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"codeberg.org/meta/bytesize"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slices"
@@ -430,6 +431,12 @@ func (s *Server) PullModelHandler(c *gin.Context) {
 		return
 	}
 
+	bandwidth, err := bytesize.ParseBytes(req.Bandwidth)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	ch := make(chan any)
 	go func() {
 		defer close(ch)
@@ -438,7 +445,8 @@ func (s *Server) PullModelHandler(c *gin.Context) {
 		}
 
 		regOpts := &registryOptions{
-			Insecure: req.Insecure,
+			Insecure:  req.Insecure,
+			Bandwidth: int(bandwidth),
 		}
 
 		ctx, cancel := context.WithCancel(c.Request.Context())
@@ -479,6 +487,12 @@ func (s *Server) PushModelHandler(c *gin.Context) {
 		return
 	}
 
+	bandwidth, err := bytesize.ParseBytes(req.Bandwidth)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	ch := make(chan any)
 	go func() {
 		defer close(ch)
@@ -487,7 +501,8 @@ func (s *Server) PushModelHandler(c *gin.Context) {
 		}
 
 		regOpts := &registryOptions{
-			Insecure: req.Insecure,
+			Insecure:  req.Insecure,
+			Bandwidth: int(bandwidth),
 		}
 
 		ctx, cancel := context.WithCancel(c.Request.Context())

@@ -286,6 +286,10 @@ See the [API documentation](./docs/api.md) for all endpoints.
 - [Olpaka](https://github.com/Otacon/olpaka) (User-friendly Flutter Web App for Ollama)
 - [OllamaSpring](https://github.com/CrazyNeil/OllamaSpring) (Ollama Client for macOS)
 
+### Evaluation
+
+- [Ollama Grid Search](https://github.com/dezoito/ollama-grid-search) (Multi-platform desktop application)
+
 ### Terminal
 
 - [oterm](https://github.com/ggozad/oterm)
@@ -379,6 +383,6 @@ See the [API documentation](./docs/api.md) for all endpoints.
 - [Discord-Ollama Chat Bot](https://github.com/kevinthedang/discord-ollama) (Generalized TypeScript Discord Bot w/ Tuning Documentation)
 - [Discord AI chat/moderation bot](https://github.com/rapmd73/Companion) Chat/moderation bot written in python. Uses Ollama to create personalities.
 
-### Supported backends 
-- [llama.cpp](https://github.com/ggerganov/llama.cpp) project founded by Georgi Gerganov.
+### Supported backends
 
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) project founded by Georgi Gerganov.

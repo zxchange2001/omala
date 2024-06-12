@@ -249,6 +249,7 @@ curl http://localhost:11434/api/generate -d '{
 ```
 
 #### Request (Reproducible outputs)
+First, make sure your ollama is started with the `OLLAMA_DISABLE_CACHE_PROMPT=1` environment variable.
 
 For reproducible outputs, set `seed` to a number:
 

@@ -202,7 +202,7 @@ func GetGPUInfo() GpuInfoList {
 	}()
 
 	if !bootstrapped {
-		slog.Debug("Detecting GPUs")
+		slog.Info("looking for compatible GPUs")
 		needRefresh = false
 		cpuCapability = GetCPUCapability()
 		var memInfo C.mem_info_t
@@ -231,7 +231,7 @@ func GetGPUInfo() GpuInfoList {
 		// On windows we bundle the nvidia library one level above the runner dir
 		depPath := ""
 		if runtime.GOOS == "windows" && envconfig.RunnersDir != "" {
-			depPath = filepath.Dir(envconfig.RunnersDir)
+			depPath = filepath.Join(filepath.Dir(envconfig.RunnersDir), "cuda")
 		}
 
 		// Load ALL libraries
@@ -282,6 +282,12 @@ func GetGPUInfo() GpuInfoList {
 		// Intel
 		if envconfig.IntelGpu {
 			oHandles = initOneAPIHandles()
+			// On windows we bundle the oneapi library one level above the runner dir
+			depPath = ""
+			if runtime.GOOS == "windows" && envconfig.RunnersDir != "" {
+				depPath = filepath.Join(filepath.Dir(envconfig.RunnersDir), "oneapi")
+			}
+
 			for d := range oHandles.oneapi.num_drivers {
 				if oHandles.oneapi == nil {
 					// shouldn't happen
@@ -306,7 +312,7 @@ func GetGPUInfo() GpuInfoList {
 					gpuInfo.FreeMemory = uint64(memInfo.free)
 					gpuInfo.ID = C.GoString(&memInfo.gpu_id[0])
 					gpuInfo.Name = C.GoString(&memInfo.gpu_name[0])
-					// TODO dependency path?
+					gpuInfo.DependencyPath = depPath
 					oneapiGPUs = append(oneapiGPUs, gpuInfo)
 				}
 			}
@@ -314,6 +320,9 @@ func GetGPUInfo() GpuInfoList {
 
 		rocmGPUs = AMDGetGPUInfo()
 		bootstrapped = true
+		if len(cudaGPUs) == 0 && len(rocmGPUs) == 0 && len(oneapiGPUs) == 0 {
+			slog.Info("no compatible GPUs were discovered")
+		}
 	}
 
 	// For detected GPUs, load library if not loaded
@@ -508,7 +517,23 @@ func LoadNVCUDAMgmt(nvcudaLibPaths []string) (int, *C.nvcuda_handle_t, string) {
 		defer C.free(unsafe.Pointer(lib))
 		C.nvcuda_init(lib, &resp)
 		if resp.err != nil {
-			slog.Debug("Unable to load nvcuda", "library", libPath, "error", C.GoString(resp.err))
+			// Decide what log level based on the type of error message to help users understand why
+			msg := C.GoString(resp.err)
+			switch resp.cudaErr {
+			case C.CUDA_ERROR_INSUFFICIENT_DRIVER, C.CUDA_ERROR_SYSTEM_DRIVER_MISMATCH:
+				slog.Warn("version mismatch between driver and cuda driver library - reboot or upgrade may be required", "library", libPath, "error", msg)
+			case C.CUDA_ERROR_NO_DEVICE:
+				slog.Info("no nvidia devices detected", "library", libPath)
+			case C.CUDA_ERROR_UNKNOWN:
+				slog.Warn("unknown error initializing cuda driver library", "library", libPath, "error", msg)
+				slog.Warn("see https://github.com/ollama/ollama/blob/main/docs/troubleshooting.md for more information")
+			default:
+				if strings.Contains(msg, "wrong ELF class") {
+					slog.Debug("skipping 32bit library", "library", libPath)
+				} else {
+					slog.Info("unable to load cuda driver library", "library", libPath, "error", msg)
+				}
+			}
 			C.free(unsafe.Pointer(resp.err))
 		} else {
 			return int(resp.num_devices), &resp.ch, libPath

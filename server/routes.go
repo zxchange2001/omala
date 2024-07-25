@@ -472,6 +472,7 @@ func (s *Server) PullModelHandler(c *gin.Context) {
 
 		regOpts := &registryOptions{
 			Insecure: req.Insecure,
+			HTTP:     req.HTTP,
 		}
 
 		ctx, cancel := context.WithCancel(c.Request.Context())
@@ -521,6 +522,7 @@ func (s *Server) PushModelHandler(c *gin.Context) {
 
 		regOpts := &registryOptions{
 			Insecure: req.Insecure,
+			HTTP:     req.HTTP,
 		}
 
 		ctx, cancel := context.WithCancel(c.Request.Context())

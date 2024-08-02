@@ -243,7 +243,7 @@ func detectContentType(r io.Reader) (string, error) {
 // mxyng: this only really works if the input contains tool calls in some JSON format
 func (m *Model) parseToolCalls(s string) ([]api.ToolCall, bool) {
 	// create a subtree from the node that ranges over .ToolCalls
-	tmpl := m.Template.Subtree(func(n parse.Node) bool {
+	tmpl := m.Template.Sub(func(n parse.Node) bool {
 		if t, ok := n.(*parse.RangeNode); ok {
 			return slices.Contains(template.Identifiers(t.Pipe), "ToolCalls")
 		}
@@ -256,7 +256,7 @@ func (m *Model) parseToolCalls(s string) ([]api.ToolCall, bool) {
 	}
 
 	var b bytes.Buffer
-	if err := tmpl.Execute(&b, map[string][]api.ToolCall{
+	if err := tmpl.Template().Execute(&b, map[string][]api.ToolCall{
 		"ToolCalls": {
 			{
 				Function: api.ToolCallFunction{

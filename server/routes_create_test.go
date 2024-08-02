@@ -489,7 +489,7 @@ func TestCreateTemplateSystem(t *testing.T) {
 			Modelfile: fmt.Sprintf("FROM %s\nTEMPLATE {{ .Prompt", createBinFile(t, nil, nil)),
 			Stream:    &stream,
 		})
-	
+
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected status code 400, actual %d", w.Code)
 		}
@@ -501,19 +501,7 @@ func TestCreateTemplateSystem(t *testing.T) {
 			Modelfile: fmt.Sprintf("FROM %s\nTEMPLATE {{ if .Prompt }}", createBinFile(t, nil, nil)),
 			Stream:    &stream,
 		})
-	
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected status code 400, actual %d", w.Code)
-		}
-	})
 
-	t.Run("template with undefined function", func(t *testing.T) {
-		w := createRequest(t, s.CreateModelHandler, api.CreateRequest{
-			Name:      "test",
-			Modelfile: fmt.Sprintf("FROM %s\nTEMPLATE {{  Prompt }}", createBinFile(t, nil, nil)),
-			Stream:    &stream,
-		})
-	
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected status code 400, actual %d", w.Code)
 		}

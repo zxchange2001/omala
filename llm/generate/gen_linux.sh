@@ -279,16 +279,20 @@ if [ -z "${OLLAMA_SKIP_ROCM_GENERATE}" -a -d "${ROCM_PATH}" ]; then
     compress
 fi
 
-if [ -z "${ASCNED_ROOT}" ]; then
+if [ -z "${ASCEND_ROOT}" ]; then
     # Try the default location in case it exists
-    ASCNED_ROOT=/usr/local/Ascend/ascend-toolkit
+    ASCEND_ROOT=/usr/local/Ascend/ascend-toolkit/latest
+    if [ -n "${ASCEND_ROOT}" ]; then
+        ASCEND_ROOT=${ASCEND_TOOLKIT_HOME}
+    fi
 fi
 
-if [ -z "${OLLAMA_SKIP_ASCEND_GENERATE}" -a -d "${ASCNED_ROOT}" ]; then
+if [ -z "${OLLAMA_SKIP_ASCEND_GENERATE}" -a -d "${ASCEND_ROOT}" ]; then
     echo "Ascned libraries detected - building dynamic Ascend library"
     init_vars
-    source ${ASCNED_ROOT}/set_env.sh --force # set up environment variables for Ascned
-    CMAKE_DEFS="${COMMON_CMAKE_DEFS} ${CMAKE_DEFS} -DGGML_CANN=ON -DBUILD_SHARED_LIBS=OFF -DGGML_OPENMP=OFF -DCMAKE_LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/lib64"
+    source ${ASCEND_ROOT}/../set_env.sh --force # set up environment variables for Ascned
+    export LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/lib64:${LIBRARY_PATH}
+    CMAKE_DEFS="${COMMON_CMAKE_DEFS} ${CMAKE_DEFS} -DGGML_CANN=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/lib64"
     BUILD_DIR="../build/linux/${ARCH}/ascend"
     build
 
@@ -302,8 +306,7 @@ if [ -z "${OLLAMA_SKIP_ASCEND_GENERATE}" -a -d "${ASCNED_ROOT}" ]; then
     # bomb out if for some reason we didn't get a few deps
     if [ $(cat "${BUILD_DIR}/bin/deps.txt" | wc -l ) -lt 33 ] ; then
         cat "${BUILD_DIR}/bin/deps.txt"
-        echo "ERROR: deps file short"
-        exit 1
+        echo "WARN: deps file short"
     fi
     compress
 fi

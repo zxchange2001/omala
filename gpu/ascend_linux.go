@@ -14,6 +14,9 @@ import (
 	"fmt"
 	"log/slog"
 	"unsafe"
+	"os"
+	"os/exec"
+	"path/filepath"
 )
 
 var AscendLinuxGlobs = []string{
@@ -47,6 +50,11 @@ func initAscendHandles() *ascendHandles {
 		return aHandles
 	}
 
+	ascendToolkitHome := os.Getenv("ASCEND_TOOLKIT_HOME")
+	if ascendToolkitHome != "" {
+		AscendLinuxGlobs = append(AscendLinuxGlobs, filepath.Join(ascendToolkitHome, "/lib64/libascendcl.so*"))
+	}
+
 	ascendLibPaths := FindGPULibs(AscendMgmtName, AscendLinuxGlobs)
 	if len(ascendLibPaths) > 0 {
 		deviceCount, ascend, libPath := LoadAscendMgmt(ascendLibPaths)
@@ -70,7 +78,7 @@ func LoadAscendMgmt(ascendLibPath []string) (int, *C.ascend_handle_t, string) {
 		defer C.free(unsafe.Pointer(lib))
 		C.ascend_init(lib, &resp)
 		if resp.err != nil {
-			slog.Info(fmt.Sprintf("Unable to load ascend management library %s: %s", libPath, C.GoString(resp.err)))
+			slog.Debug(fmt.Sprintf("Unable to load ascend management library %s: %s", libPath, C.GoString(resp.err)))
 			C.free(unsafe.Pointer(resp.err))
 		} else {
 			return int(resp.num_devices), &resp.ah, libPath

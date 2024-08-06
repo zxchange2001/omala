@@ -196,9 +196,10 @@ func GetGPUInfo() GpuInfoList {
 				C.oneapi_release(*oHandles.oneapi)
 			}
 		}
-
-		if aHandles.ascend != nil {
-			C.ascend_release(*aHandles.ascend)
+		if aHandles != nil {
+			if aHandles.ascend != nil {
+				C.ascend_release(*aHandles.ascend)
+			}
 		}
 	}()
 

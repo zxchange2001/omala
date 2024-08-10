@@ -43,7 +43,7 @@ const (
 
 	//AMD APU RDNA2 and RDNA3 for GTT memory
 	GFX1103 = "gfx1103"
-    GFX1030 = "gfx1030"
+    	GFX1030 = "gfx1035"
 )
 
 var (
@@ -79,7 +79,7 @@ func checkGTTmemoryOnAPU(gfx string) (bool, error) {
 		return false, fmt.Errorf("error parsing minor version: %w", err)
 	}
 
-	kernelVersionValid := (major > 6 || (major == 6 && minor > 10))
+	kernelVersionValid := (major > 6 || (major == 6 && minor >= 10))
 
 	// Check GFX value
 	gfxValid := false

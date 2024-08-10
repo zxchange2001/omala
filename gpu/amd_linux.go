@@ -42,8 +42,12 @@ const (
 	DRMDeviceFile   = "device"
 
 	//AMD APU RDNA2 and RDNA3 for GTT memory
-	GFX1103 = "gfx1103"
-    	GFX1035 = "gfx1035"
+	GFX1103 = "gfx1103" //780m GPU RDNA3 
+    	GFX1035 = "gfx1035" //680m GPU RDNA2
+	GFX1033 = "gfx1033" //RDNA2
+	GFX1036 = "gfx1036" //RDNA2
+	GFX1151 = "gfx1151" //RDNA3+
+	GFX1152 = "gfx1152" //RDNA3+
 )
 
 var (
@@ -51,7 +55,7 @@ var (
 	ROCmLibGlobs          = []string{"libhipblas.so.2*", "rocblas"} // TODO - probably include more coverage of files here...
 	RocmStandardLocations = []string{"/opt/rocm/lib", "/usr/lib64"}
 	// Used to validate if supported APU for GTT memory allocation
-	validGfxValues = []string{GFX1103, GFX1035}
+	validGfxValues = []string{GFX1103, GFX1035, GFX1033, GFX1036, GFX1151, GFX1152}
 )
 
 // Check for valid APU an linux kenel version to use GTT memory insted VRAM memory

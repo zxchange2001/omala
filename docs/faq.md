@@ -280,7 +280,7 @@ Installing multiple GPUs of the same brand can be a great way to increase your a
 
 ## How can I set the quantization type for the K/V cache?
 
-The K/V context cache can be quantised to significantly reduce memory usage.
+The K/V context cache can be quantised to significantly reduce memory usage when Flash Attention is enabled.
 
 You can set the quantization type in a number of ways:
 

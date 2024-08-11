@@ -55,7 +55,7 @@ var (
 	ROCmLibGlobs          = []string{"libhipblas.so.2*", "rocblas"} // TODO - probably include more coverage of files here...
 	RocmStandardLocations = []string{"/opt/rocm/lib", "/usr/lib64"}
 	// Used to validate if supported APU for GTT memory allocation
-	validGfxValues = []string{GFX1103, GFX1035, GFX1033, GFX1036, GFX1151, GFX1152}
+	APUvalidForGTT = []string{GFX1103, GFX1035, GFX1033, GFX1036, GFX1151, GFX1152}
 )
 
 // Check for valid APU an linux kenel version to use GTT memory insted VRAM memory
@@ -87,7 +87,7 @@ func checkGTTmemoryOnAPU(gfx string) (bool, error) {
 
 	// Check GFX value
 	gfxValid := false
-	for _, validGfx := range validGfxValues {
+	for _, validGfx := range APUvalidForGTT {
 		if strings.Contains(gfx, validGfx) {
 			gfxValid = true
 			break

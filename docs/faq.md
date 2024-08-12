@@ -280,14 +280,13 @@ Installing multiple GPUs of the same brand can be a great way to increase your a
 
 ## How can I set the quantization type for the K/V cache?
 
-The K/V context cache can be quantised to significantly reduce memory usage when Flash Attention is enabled.
+The K/V context cache can be quantized to significantly reduce memory usage when Flash Attention is enabled.
 
 You can set the quantization type in a number of ways:
 
 1. In the environment using `OLLAMA_CACHE_TYPE_K` and `OLLAMA_CACHE_TYPE_V` which will be the default vault for all models loaded.
 2. In a model's Modelfile using the `cache_type_k` and `cache_type_v` parameters which will be loaded with the model.
-3. In an API request to Ollama's native API using the `cache_type_k` and `cache_type_v` parameters which will be used for that request.
-4. In the CLI with `/set parameter cache_type_k <value>` and `/set parameter cache_type_v <value>` which will be used for that session.
+3. In the CLI with `/set parameter cache_type_k <value>` and `/set parameter cache_type_v <value>` which will be used for that session.
 
 While there are [a number of quantization types available](https://github.com/ggerganov/llama.cpp/pull/7527), the most common you might want to choose are:
 

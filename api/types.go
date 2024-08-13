@@ -612,8 +612,6 @@ func DefaultOptions() Options {
 			NumGPU:     -1, // -1 here indicates that NumGPU should be set dynamically
 			NumThread:  0,  // let the runtime decide
 			LowVRAM:    false,
-			CacheTypeK: "f16",
-			CacheTypeV: "f16",
 			UseMLock:   false,
 			UseMMap:    nil,
 		},

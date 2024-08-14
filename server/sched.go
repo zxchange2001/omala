@@ -607,6 +607,11 @@ func (runner *runnerRef) needsReload(ctx context.Context, req *LlmRequest) bool 
 	// Normalize the NumCtx for parallelism
 	optsExisting.NumCtx = optsExisting.NumCtx / runner.numParallel
 
+	// Compare cache types
+	if runner.Options.CacheTypeK != req.opts.CacheTypeK || runner.Options.CacheTypeV != req.opts.CacheTypeV {
+		return true
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if !reflect.DeepEqual(runner.model.AdapterPaths, req.model.AdapterPaths) || // have the adapters changed?

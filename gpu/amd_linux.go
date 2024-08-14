@@ -67,24 +67,31 @@ func checkGTTmemoryOnAPU(gfx string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error executing uname command: %w", err)
 	}
-	
+
 	fullKernelVersion := strings.TrimSpace(string(output))
-	parts := strings.Split(fullKernelVersion, ".")
-	if len(parts) < 3 {
+	
+	// Split by "-" and take the first part, or use the whole string if no "-" is present
+	versionPart := fullKernelVersion
+	if parts := strings.SplitN(fullKernelVersion, "-", 2); len(parts) > 1 {
+		versionPart = parts[0]
+	}
+
+	versionParts := strings.Split(versionPart, ".")
+	if len(versionParts) < 3 {
 		return false, fmt.Errorf("unable to parse kernel version: %s", fullKernelVersion)
 	}
 
-	major, err := strconv.Atoi(parts[0])
+	major, err := strconv.Atoi(versionParts[0])
 	if err != nil {
 		return false, fmt.Errorf("error parsing major version: %w", err)
 	}
 
-	minor, err := strconv.Atoi(parts[1])
+	minor, err := strconv.Atoi(versionParts[1])
 	if err != nil {
 		return false, fmt.Errorf("error parsing minor version: %w", err)
 	}
 
-	patch, err := strconv.Atoi(parts[2])
+	patch, err := strconv.Atoi(versionParts[2])
 	if err != nil {
 		return false, fmt.Errorf("error parsing patch version: %w", err)
 	}
@@ -98,6 +105,7 @@ func checkGTTmemoryOnAPU(gfx string) (bool, error) {
 			gfxValid = true
 			break
 		}
+	}
 
 	// Return true only if both conditions are met
 	return kernelVersionValid && gfxValid, nil

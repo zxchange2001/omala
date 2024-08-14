@@ -49,6 +49,10 @@ const (
 	GFX1036 = "gfx1036" //RDNA2
 	GFX1151 = "gfx1151" //RDNA3+
 	GFX1152 = "gfx1152" //RDNA3+
+	GFX941 = "gfx941" //MI300X, CDNA3
+	GFX942 = "gfx942" //MI300X, MI300A CDNA3
+	GFX940 = "gfx940" //MI300A CDNA3
+
 )
 
 var (
@@ -56,7 +60,7 @@ var (
 	ROCmLibGlobs          = []string{"libhipblas.so.2*", "rocblas"} // TODO - probably include more coverage of files here...
 	RocmStandardLocations = []string{"/opt/rocm/lib", "/usr/lib64"}
 	// Used to validate if supported APU for GTT memory allocation
-	APUvalidForGTT = []string{GFX1103, GFX1035, GFX1033, GFX1036, GFX1151, GFX1152, GFX1037}
+	APUvalidForGTT = []string{GFX1103, GFX1035, GFX1033, GFX1036, GFX1151, GFX1152, GFX1037, GFX941, GFX942, GFX940}
 )
 
 // Check for valid APU an linux kenel version to use GTT memory insted VRAM memory

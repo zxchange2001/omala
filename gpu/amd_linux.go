@@ -7,13 +7,13 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
-	"os/exec"
 
 	"github.com/ollama/ollama/envconfig"
 	"github.com/ollama/ollama/format"
@@ -30,9 +30,9 @@ const (
 	GPUTotalMemoryFileGlob = "mem_banks/*/properties" // size_in_bytes line
 
 	// Direct Rendering Manager sysfs location
-	DRMDeviceDirGlob   = "/sys/class/drm/card*/device"
-	DRMTotalMemoryFile = "mem_info_vram_total"
-	DRMUsedMemoryFile  = "mem_info_vram_used"
+	DRMDeviceDirGlob      = "/sys/class/drm/card*/device"
+	DRMTotalMemoryFile    = "mem_info_vram_total"
+	DRMUsedMemoryFile     = "mem_info_vram_used"
 	DRMTotalMemoryFileGTT = "mem_info_gtt_total"
 	DRMUsedMemoryFileGTT  = "mem_info_gtt_used"
 
@@ -42,14 +42,14 @@ const (
 	DRMDeviceFile   = "device"
 
 	//AMD APU RDNA2 and RDNA3 for GTT memory
-	GFX1103 = "gfx1103" //890m, 780m, 760m, 740m GPU RDNA3 
+	GFX1103 = "gfx1103" //890m, 780m, 760m, 740m GPU RDNA3
 	GFX1037 = "gfx1037" //610M GPU RDNA2
-    	GFX1035 = "gfx1035" //680m, 660m GPU RDNA2
+	GFX1035 = "gfx1035" //680m, 660m GPU RDNA2
 	GFX1033 = "gfx1033" //Van Gogh RDNA2
 	GFX1036 = "gfx1036" //RDNA2
 	GFX1151 = "gfx1151" //RDNA3+
 	GFX1152 = "gfx1152" //RDNA3+
-//	GFX942 = "gfx942" //MI300X, MI300A CDNA3
+	//	GFX942 = "gfx942" //MI300X, MI300A CDNA3
 	GFX940 = "gfx940" //MI300A CDNA3
 
 )
@@ -59,7 +59,7 @@ var (
 	ROCmLibGlobs          = []string{"libhipblas.so.2*", "rocblas"} // TODO - probably include more coverage of files here...
 	RocmStandardLocations = []string{"/opt/rocm/lib", "/usr/lib64"}
 	// Used to validate if supported APU for GTT memory allocation
-	APUvalidForGTT = []string{GFX1103, GFX1035, GFX1033, GFX1036, GFX1151, GFX1152, GFX1037, GFX940, GFX942 }
+	APUvalidForGTT = []string{GFX1103, GFX1035, GFX1033, GFX1036, GFX1151, GFX1152, GFX1037, GFX940}
 )
 
 // Check for valid APU an linux kenel version to use GTT memory insted VRAM memory
@@ -72,7 +72,7 @@ func checkGTTmemoryOnAPU(gfx string) (bool, error) {
 	}
 
 	fullKernelVersion := strings.TrimSpace(string(output))
-	
+
 	// Split by "-" and take the first part, or use the whole string if no "-" is present
 	versionPart := fullKernelVersion
 	if parts := strings.SplitN(fullKernelVersion, "-", 2); len(parts) > 1 {
@@ -315,13 +315,13 @@ func AMDGetGPUInfo() []RocmGPUInfo {
 			if !matched {
 				continue
 			}
-			
+
 			GTTisValid, err := checkGTTmemoryOnAPU(fmt.Sprintf("gfx%d%x%x", major, minor, patch))
 			if err != nil {
 				slog.Debug("Error:", err)
 				continue
 			}
-		
+
 			// Found the matching DRM directory
 			slog.Debug("matched", "amdgpu", match, "drm", devDir)
 			totalFile := filepath.Join(devDir, DRMTotalMemoryFile)

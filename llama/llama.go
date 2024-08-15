@@ -329,6 +329,10 @@ func NewClipContext(modelPath string) *ClipContext {
 	return &ClipContext{c: cc}
 }
 
+func (c *ClipContext) Close() {
+	C.clip_free(c.c)
+}
+
 type LlavaContext struct {
 	c *C.struct_llava_context
 }

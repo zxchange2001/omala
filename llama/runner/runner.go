@@ -25,18 +25,21 @@ import (
 )
 
 // input is an element of the prompt to process, either
-// a token or an embedding (e.g. generated from a vision projector)
+// a token or an image embedding (generated from a vision projector)
 type input struct {
 	token int
 
 	// embd is an image embedding
 	// important to note, embd contains a series of embeddings, all backed
 	// by a single float* buffer
-	// TODO (jmorganca):
+	// TODO (jmorganca): change this to a slice of float32 instead of
+	// using the llama.LlavaImageEmbed type
 	embd *llama.LlavaImageEmbed
 }
 
 type Sequence struct {
+	ctx context.Context
+
 	// number of tokens evaluated
 	nPast int
 
@@ -78,19 +81,18 @@ type Sequence struct {
 }
 
 // prompt returns true if the prompt is still being processed
-// TODO (jmorganca): clean up this logic
 func (s *Sequence) isPromptProcessing() bool {
-	var total int
+	var tokens int
 	for _, i := range s.inputs {
 		if i.embd == nil {
-			total++
+			tokens++
 			continue
 		}
 
-		total += i.embd.Tokens()
+		tokens += i.embd.Tokens()
 	}
 
-	return s.nPast < total-1
+	return s.nPast < tokens-1
 }
 
 // inputs processes the prompt and images into a list of inputs
@@ -131,13 +133,12 @@ func (s *Server) inputs(prompt string, images []string) ([]input, error) {
 			}
 
 			// Vision models can not be used concurrently
+			// TODO (jmorganca): check for duplicates so we
+			// don't encode the same image twice
 			s.clip.mu.Lock()
-
-			// todo: check for duplicates so we don't encode the same image twice
-			slog.Info("encoding image", "n", n)
 			embd := llama.NewLlavaImageEmbed(s.clip.cc, decoded)
-
 			s.clip.mu.Unlock()
+
 			inputs = append(inputs, input{embd: embd})
 		}
 	}
@@ -145,7 +146,7 @@ func (s *Server) inputs(prompt string, images []string) ([]input, error) {
 	return inputs, nil
 }
 
-func (s *Server) NewSequence(prompt string, images []string, numPredict int, stop []string, params *llama.SamplingParams, embedding bool) (*Sequence, error) {
+func (s *Server) NewSequence(ctx context.Context, prompt string, images []string, numPredict int, stop []string, params *llama.SamplingParams, embedding bool) (*Sequence, error) {
 	inputs, err := s.inputs(prompt, images)
 	if err != nil {
 		return nil, fmt.Errorf("failed to process inputs: %w", err)
@@ -162,6 +163,7 @@ func (s *Server) NewSequence(prompt string, images []string, numPredict int, sto
 	}
 
 	return &Sequence{
+		ctx:             ctx,
 		inputs:          inputs,
 		n_prompt_tokens: len(inputs),
 		responses:       make(chan string, 1),
@@ -219,6 +221,8 @@ func (s *Server) waiting() bool {
 }
 
 // processImage processes an image embedding if it's next in any sequence
+// TODO (jmorganca): process image embeddings in parallel since this calls
+// llama_decode separately from the main loop in run below
 func (s *Server) processImage() bool {
 	for _, seq := range s.seqs {
 		if seq == nil {
@@ -237,14 +241,14 @@ func (s *Server) processImage() bool {
 	return false
 }
 
-func (s *Server) run(ctx context.Context) {
+func (s *Server) run(ctx context.Context) error {
 	batch := llama.NewBatch(s.batchSize, 0, s.parallel)
 	defer batch.Free()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 			s.mu.Lock()
 			for s.waiting() {
@@ -252,9 +256,18 @@ func (s *Server) run(ctx context.Context) {
 			}
 			s.mu.Unlock()
 
-			// first process an image embedding if is it next on any sequence
-			// TODO (jmorganca): this will block calls to `Decode` below
-			// until images are processed
+			// check for cancelled sequences
+			for i, seq := range s.seqs {
+				if seq != nil && seq.ctx.Err() != nil {
+					s.lc.KvCacheSeqRm(i, 0, -1)
+					s.seqs[i] = nil
+					continue
+				}
+			}
+
+			// evaluate image embeddings if they are next in any sequence
+			// TODO (jmorganca): ideally embeddings would be processed
+			// alongside tokens as part of the same batch.
 			if s.processImage() {
 				continue
 			}
@@ -282,7 +295,7 @@ func (s *Server) run(ctx context.Context) {
 				}
 
 				for j, t := range seq.inputs {
-					// break if this is an image embedding to be handled in a follow up batch
+					// image embeddings are handled above
 					if t.embd != nil {
 						break
 					}
@@ -295,16 +308,14 @@ func (s *Server) run(ctx context.Context) {
 					seq.nPast++
 				}
 
+				seq.inputs = seq.inputs[batch.NumTokens():]
 				seq.iBatch = batch.NumTokens() - 1
 			}
 
 			if batch.NumTokens() > 0 {
 				err := s.lc.Decode(batch)
 				if err != nil {
-					slog.Error("failed to decode batch", "error", err)
-
-					// TODO (jmorganca): handle this better by returning an error
-					panic(err)
+					return err
 				}
 			}
 
@@ -315,15 +326,7 @@ func (s *Server) run(ctx context.Context) {
 				}
 
 				// don't sample while prompt processing
-				if seq.isPromptProcessing() {
-					if batch.NumTokens() > 0 {
-						seq.inputs = seq.inputs[batch.NumTokens():]
-					} else {
-						// image case
-						// TODO (jmorganca): simplify this
-						seq.inputs = seq.inputs[1:]
-					}
-
+				if len(seq.inputs) > 0 {
 					continue
 				}
 
@@ -373,6 +376,7 @@ func (s *Server) run(ctx context.Context) {
 
 				seq.inputs = []input{{token: token}}
 
+				// look for stop sequences (or beginnings of one)
 				seq.pieces = append(seq.pieces, piece)
 				sequence := strings.Join(seq.pieces, "")
 				if ok, stop := findStop(sequence, seq.stop); ok {
@@ -446,14 +450,12 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 	var req CompletionRequest
 	req.Options = api.DefaultOptions()
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("bad request: %s", err), http.StatusBadRequest)
 		return
 	}
 
-	// Set the headers to indicate streaming
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Transfer-Encoding", "chunked")
-	w.WriteHeader(http.StatusOK)
 
 	var samplingParams llama.SamplingParams
 	samplingParams.TopK = req.TopK
@@ -471,7 +473,7 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 	samplingParams.Seed = uint32(req.Seed)
 	samplingParams.Grammar = req.Grammar
 
-	seq, err := s.NewSequence(req.Prompt, req.Images, req.NumPredict, req.Stop, &samplingParams, false)
+	seq, err := s.NewSequence(r.Context(), req.Prompt, req.Images, req.NumPredict, req.Stop, &samplingParams, false)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create new sequence: %v", err), http.StatusInternalServerError)
 		return
@@ -489,18 +491,18 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "could not get flusher", http.StatusInternalServerError)
+		return
+	}
+
 	// stream the response
 	for content := range seq.responses {
 		if err := json.NewEncoder(w).Encode(&CompletionResponse{
 			Content: content,
 		}); err != nil {
 			http.Error(w, fmt.Sprintf("failed to encode response: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "could not get flusher", http.StatusInternalServerError)
 			return
 		}
 
@@ -521,13 +523,7 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "could not get flusher", http.StatusInternalServerError)
-		return
-	}
-
-	flusher.Flush()
+	// cleanup any unused resources
 }
 
 type EmbeddingRequest struct {
@@ -554,7 +550,7 @@ func (s *Server) embeddings(w http.ResponseWriter, r *http.Request) {
 	var processed int
 	var err error
 	for i, content := range req.Content {
-		seqs[i], err = s.NewSequence(content, nil, 0, nil, nil, true)
+		seqs[i], err = s.NewSequence(r.Context(), content, nil, 0, nil, nil, true)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to create new sequence: %v", err), http.StatusInternalServerError)
 			return
@@ -695,6 +691,7 @@ func main() {
 
 	if *ppath != "" {
 		server.clip.cc = llama.NewClipContext(*ppath)
+		defer server.clip.cc.Close()
 	}
 
 	server.cond = sync.NewCond(&server.mu)

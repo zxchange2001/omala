@@ -30,16 +30,13 @@ type input struct {
 	token int
 
 	// embd is an image embedding
-	// important to note, embd contains a series of embeddings, all backed
-	// by a single float* buffer
+	// important to note, embd contains a series of embeddings as a float*
 	// TODO (jmorganca): change this to a slice of float32 instead of
 	// using the llama.LlavaImageEmbed type
 	embd *llama.LlavaImageEmbed
 }
 
 type Sequence struct {
-	ctx context.Context
-
 	// number of tokens evaluated
 	nPast int
 
@@ -146,7 +143,7 @@ func (s *Server) inputs(prompt string, images []string) ([]input, error) {
 	return inputs, nil
 }
 
-func (s *Server) NewSequence(ctx context.Context, prompt string, images []string, numPredict int, stop []string, params *llama.SamplingParams, embedding bool) (*Sequence, error) {
+func (s *Server) NewSequence(prompt string, images []string, numPredict int, stop []string, params *llama.SamplingParams, embedding bool) (*Sequence, error) {
 	inputs, err := s.inputs(prompt, images)
 	if err != nil {
 		return nil, fmt.Errorf("failed to process inputs: %w", err)
@@ -163,7 +160,6 @@ func (s *Server) NewSequence(ctx context.Context, prompt string, images []string
 	}
 
 	return &Sequence{
-		ctx:             ctx,
 		inputs:          inputs,
 		n_prompt_tokens: len(inputs),
 		responses:       make(chan string, 1),
@@ -256,15 +252,6 @@ func (s *Server) run(ctx context.Context) error {
 			}
 			s.mu.Unlock()
 
-			// check for cancelled sequences
-			for i, seq := range s.seqs {
-				if seq != nil && seq.ctx.Err() != nil {
-					s.lc.KvCacheSeqRm(i, 0, -1)
-					s.seqs[i] = nil
-					continue
-				}
-			}
-
 			// evaluate image embeddings if they are next in any sequence
 			// TODO (jmorganca): ideally embeddings would be processed
 			// alongside tokens as part of the same batch.
@@ -286,7 +273,9 @@ func (s *Server) run(ctx context.Context) error {
 					seq.doneReason = "limit"
 					close(seq.responses)
 					s.lc.KvCacheSeqRm(i, 0, -1)
+					s.mu.Lock()
 					s.seqs[i] = nil
+					s.mu.Unlock()
 					continue
 				}
 
@@ -340,7 +329,9 @@ func (s *Server) run(ctx context.Context) error {
 					seq.embedding <- embd
 					close(seq.embedding)
 					s.lc.KvCacheSeqRm(i, 0, -1)
+					s.mu.Lock()
 					s.seqs[i] = nil
+					s.mu.Unlock()
 					continue
 				}
 
@@ -370,7 +361,9 @@ func (s *Server) run(ctx context.Context) error {
 					seq.doneReason = "stop"
 					close(seq.responses)
 					seq.samplingCtx.Free()
+					s.mu.Lock()
 					s.seqs[i] = nil
+					s.mu.Unlock()
 					continue
 				}
 
@@ -392,7 +385,9 @@ func (s *Server) run(ctx context.Context) error {
 					seq.doneReason = "stop"
 					close(seq.responses)
 					seq.samplingCtx.Free()
+					s.mu.Lock()
 					s.seqs[i] = nil
+					s.mu.Unlock()
 					continue
 				}
 
@@ -473,7 +468,7 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 	samplingParams.Seed = uint32(req.Seed)
 	samplingParams.Grammar = req.Grammar
 
-	seq, err := s.NewSequence(r.Context(), req.Prompt, req.Images, req.NumPredict, req.Stop, &samplingParams, false)
+	seq, err := s.NewSequence(req.Prompt, req.Images, req.NumPredict, req.Stop, &samplingParams, false)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create new sequence: %v", err), http.StatusInternalServerError)
 		return
@@ -497,33 +492,39 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// stream the response
-	for content := range seq.responses {
-		if err := json.NewEncoder(w).Encode(&CompletionResponse{
-			Content: content,
-		}); err != nil {
-			http.Error(w, fmt.Sprintf("failed to encode response: %v", err), http.StatusInternalServerError)
+	for {
+		select {
+		case <-r.Context().Done():
 			return
+		case content, ok := <-seq.responses:
+			if !ok {
+				// Send the final response
+				if err := json.NewEncoder(w).Encode(&CompletionResponse{
+					Stop: true,
+					Timings: Timings{
+						PromptN:     seq.n_prompt_tokens,
+						PromptMS:    float64(seq.t_start_genereration.Sub(seq.t_start_process_prompt).Milliseconds()),
+						PredictedN:  seq.n_decoded,
+						PredictedMS: float64(time.Since(seq.t_start_genereration).Milliseconds()),
+					},
+				}); err != nil {
+					http.Error(w, fmt.Sprintf("failed to encode final response: %v", err), http.StatusInternalServerError)
+					return
+				}
+
+				return
+			}
+
+			if err := json.NewEncoder(w).Encode(&CompletionResponse{
+				Content: content,
+			}); err != nil {
+				http.Error(w, fmt.Sprintf("failed to encode response: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			flusher.Flush()
 		}
-
-		flusher.Flush()
 	}
-
-	// Send the stop
-	if err := json.NewEncoder(w).Encode(&CompletionResponse{
-		Stop: true,
-		Timings: Timings{
-			PromptN:     seq.n_prompt_tokens,
-			PromptMS:    float64(seq.t_start_genereration.Sub(seq.t_start_process_prompt).Milliseconds()),
-			PredictedN:  seq.n_decoded,
-			PredictedMS: float64(time.Since(seq.t_start_genereration).Milliseconds()),
-		},
-	}); err != nil {
-		http.Error(w, fmt.Sprintf("failed to encode final response: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// cleanup any unused resources
 }
 
 type EmbeddingRequest struct {
@@ -550,7 +551,7 @@ func (s *Server) embeddings(w http.ResponseWriter, r *http.Request) {
 	var processed int
 	var err error
 	for i, content := range req.Content {
-		seqs[i], err = s.NewSequence(r.Context(), content, nil, 0, nil, nil, true)
+		seqs[i], err = s.NewSequence(content, nil, 0, nil, nil, true)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to create new sequence: %v", err), http.StatusInternalServerError)
 			return
@@ -697,7 +698,14 @@ func main() {
 	server.cond = sync.NewCond(&server.mu)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go server.run(ctx)
+	go func() {
+		// TODO (jmorganca): handle this better
+		err := server.run(ctx)
+		if err != nil {
+			slog.Error("fatal error encountered", "error", err)
+			os.Exit(1)
+		}
+	}()
 
 	addr := "127.0.0.1:" + strconv.Itoa(*port)
 	listener, err := net.Listen("tcp", addr)

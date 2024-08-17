@@ -20,6 +20,9 @@ for TARGETARCH in ${BUILD_ARCH}; do
     docker cp builder-$TARGETARCH:/go/src/github.com/ollama/ollama/dist/ollama-linux-$TARGETARCH.tgz ./dist/
     if echo ${TARGETARCH} | grep "amd64" > /dev/null; then
         docker cp builder-$TARGETARCH:/go/src/github.com/ollama/ollama/dist/ollama-linux-$TARGETARCH-rocm.tgz ./dist/
+    else
+        docker cp builder-$TARGETARCH:/go/src/github.com/ollama/ollama/dist/ollama-linux-$TARGETARCH-jetpack5.tgz ./dist/
+        docker cp builder-$TARGETARCH:/go/src/github.com/ollama/ollama/dist/ollama-linux-$TARGETARCH-jetpack6.tgz ./dist/
     fi
     docker rm builder-$TARGETARCH
 done

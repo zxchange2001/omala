@@ -163,6 +163,32 @@ if [ "$IS_WSL2" = true ]; then
     exit 0
 fi
 
+# Check for Jetson systems
+if [ "$ARCH" = "arm64" ] && [ -f /etc/nv_tegra_release ] && [ $BUNDLE -ne 0 ] ; then
+    if grep "R35" /etc/nv_tegra_release > /dev/null ; then
+        status "Nvidia JetPack 5 detected.  Downloading Linux JetPack bundle"
+        curl --fail --show-error --location --progress-bar \
+            "https://ollama.com/download/ollama-linux-${ARCH}-jetpack5.tgz${VER_PARAM}" | \
+            $SUDO tar -xzf - -C "$OLLAMA_INSTALL_DIR"
+        install_success
+        status "Nvidia GPU ready."
+        exit 0
+    elif grep "R36" /etc/nv_tegra_release > /dev/null ; then
+        status "Nvidia JetPack 6 detected.  Downloading Linux JetPack bundle"
+        curl --fail --show-error --location --progress-bar \
+            "https://ollama.com/download/ollama-linux-${ARCH}-jetpack6.tgz${VER_PARAM}" | \
+            $SUDO tar -xzf - -C "$OLLAMA_INSTALL_DIR"
+        install_success
+        status "Nvidia GPU ready."
+        exit 0
+    else
+        warning "Nvidia Jetpack version not recognized"
+        # show the version for issue reporting
+        head -1 /etc/nv_tegra_release
+        exit 0
+    fi
+fi
+
 # Install GPU dependencies on Linux
 if ! available lspci && ! available lshw; then
     warning "Unable to detect NVIDIA/AMD GPU. Install lspci or lshw to automatically detect and install GPU dependencies."

@@ -226,7 +226,6 @@ func (s *Server) processImage() bool {
 
 		if len(seq.inputs) > 0 && seq.inputs[0].embd != nil {
 			// TODO (jmorganca): this only works with n_parallel=1
-			slog.Info("processing image", "seqId", i, "nPast", seq.nPast)
 			llama.LlavaEvalImageEmbed(s.lc, seq.inputs[0].embd, s.batchSize, &seq.nPast)
 			llama.LlavaImageEmbedFree(seq.inputs[0].embd)
 			seq.iBatch = seq.inputs[0].embd.Tokens() - 1
@@ -348,7 +347,6 @@ func (s *Server) run(ctx context.Context) error {
 					continue
 				}
 
-				slog.Info("sampling", "nPast", seq.nPast, "iBatch", seq.iBatch)
 				token := seq.samplingCtx.Sample(s.lc, nil, seq.iBatch)
 				seq.samplingCtx.Accept(s.lc, token, true)
 				seq.n_decoded += 1
@@ -381,8 +379,6 @@ func (s *Server) run(ctx context.Context) error {
 				seq.pieces = append(seq.pieces, piece)
 				sequence := strings.Join(seq.pieces, "")
 				if ok, stop := findStop(sequence, seq.stop); ok {
-					slog.Info("hit stop token", "stop", seq.stop)
-
 					truncated := truncateStop(seq.pieces, stop)
 
 					for _, p := range truncated {
@@ -498,7 +494,6 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-main:
 	for {
 		select {
 		case <-r.Context().Done():
@@ -521,7 +516,7 @@ main:
 				}
 				flusher.Flush()
 
-				break main
+				return
 			}
 
 			if err := json.NewEncoder(w).Encode(&CompletionResponse{

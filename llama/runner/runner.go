@@ -105,7 +105,7 @@ func (s *Server) inputs(prompt string, images []string) ([]input, error) {
 	for i, part := range parts {
 		// text - tokenize
 		if strings.TrimSpace(part) != "" {
-			tokens, err := s.lc.Model().Tokenize(prompt, false, true)
+			tokens, err := s.lc.Model().Tokenize(part, i == 0, true)
 			if err != nil {
 				return nil, err
 			}
@@ -124,14 +124,13 @@ func (s *Server) inputs(prompt string, images []string) ([]input, error) {
 
 			decoded, err := base64.StdEncoding.DecodeString(images[n])
 			if err != nil {
-				// TODO (jmorganca): return an error?
 				slog.Error("Failed to decode image", "error", err)
 				return nil, err
 			}
 
-			// Vision models can not be used concurrently
-			// TODO (jmorganca): check for duplicates so we
-			// don't encode the same image twice
+			// Vision models can not be accessed concurrently
+			// TODO (jmorganca): store the actual float* embedding
+			// returned by the vision model instead of the llama.LlavaImageEmbed
 			s.clip.mu.Lock()
 			embd := llama.NewLlavaImageEmbed(s.clip.cc, decoded)
 			s.clip.mu.Unlock()
@@ -205,7 +204,7 @@ type Server struct {
 	status string
 }
 
-// waiting is true if there are no sequences to process
+// waiting returns true if there are no sequences to process
 func (s *Server) waiting() bool {
 	for _, item := range s.seqs {
 		if item != nil {
@@ -220,12 +219,14 @@ func (s *Server) waiting() bool {
 // TODO (jmorganca): process image embeddings in parallel since this calls
 // llama_decode separately from the main loop in run below
 func (s *Server) processImage() bool {
-	for _, seq := range s.seqs {
+	for i, seq := range s.seqs {
 		if seq == nil {
 			continue
 		}
 
 		if len(seq.inputs) > 0 && seq.inputs[0].embd != nil {
+			// TODO (jmorganca): this only works with n_parallel=1
+			slog.Info("processing image", "seqId", i, "nPast", seq.nPast)
 			llama.LlavaEvalImageEmbed(s.lc, seq.inputs[0].embd, s.batchSize, &seq.nPast)
 			llama.LlavaImageEmbedFree(seq.inputs[0].embd)
 			seq.iBatch = seq.inputs[0].embd.Tokens() - 1
@@ -237,6 +238,21 @@ func (s *Server) processImage() bool {
 	return false
 }
 
+func (s *Server) cleanup(i int) {
+	s.seqs[i].samplingCtx.Free()
+	s.lc.KvCacheSeqRm(i, 0, -1)
+	s.mu.Lock()
+	s.seqs[i] = nil
+	s.mu.Unlock()
+}
+
+// TODO (jmorganca): run should be simplified, removing:
+// * sampling
+// * stop token checking
+// * metrics
+// these should instead be handled by the handlers
+// it should only be responsible for accepting tokens or embeddings and
+// processing batches as fast as possible
 func (s *Server) run(ctx context.Context) error {
 	batch := llama.NewBatch(s.batchSize, 0, s.parallel)
 	defer batch.Free()
@@ -254,7 +270,9 @@ func (s *Server) run(ctx context.Context) error {
 
 			// evaluate image embeddings if they are next in any sequence
 			// TODO (jmorganca): ideally embeddings would be processed
-			// alongside tokens as part of the same batch.
+			// alongside tokens as part of the same batch. this will
+			// currently cause a pause in other sequences while the image
+			// is processed
 			if s.processImage() {
 				continue
 			}
@@ -272,10 +290,7 @@ func (s *Server) run(ctx context.Context) error {
 				if hitLimit || seq.nPast > s.numCtx {
 					seq.doneReason = "limit"
 					close(seq.responses)
-					s.lc.KvCacheSeqRm(i, 0, -1)
-					s.mu.Lock()
-					s.seqs[i] = nil
-					s.mu.Unlock()
+					s.cleanup(i)
 					continue
 				}
 
@@ -283,10 +298,10 @@ func (s *Server) run(ctx context.Context) error {
 					seq.t_start_process_prompt = time.Now()
 				}
 
+				var tokens int
 				for j, t := range seq.inputs {
-					// image embeddings are handled above
 					if t.embd != nil {
-						break
+						continue
 					}
 
 					if j > s.batchSize {
@@ -294,11 +309,12 @@ func (s *Server) run(ctx context.Context) error {
 					}
 
 					batch.Add(t.token, seq.nPast, []int{i}, !seq.isPromptProcessing())
+					tokens += 1
 					seq.nPast++
 				}
 
-				seq.inputs = seq.inputs[batch.NumTokens():]
-				seq.iBatch = batch.NumTokens() - 1
+				seq.inputs = seq.inputs[1:]
+				seq.iBatch = tokens - 1
 			}
 
 			if batch.NumTokens() > 0 {
@@ -328,13 +344,11 @@ func (s *Server) run(ctx context.Context) error {
 
 					seq.embedding <- embd
 					close(seq.embedding)
-					s.lc.KvCacheSeqRm(i, 0, -1)
-					s.mu.Lock()
-					s.seqs[i] = nil
-					s.mu.Unlock()
+					s.cleanup(i)
 					continue
 				}
 
+				slog.Info("sampling", "nPast", seq.nPast, "iBatch", seq.iBatch)
 				token := seq.samplingCtx.Sample(s.lc, nil, seq.iBatch)
 				seq.samplingCtx.Accept(s.lc, token, true)
 				seq.n_decoded += 1
@@ -351,19 +365,13 @@ func (s *Server) run(ctx context.Context) error {
 				// if it's an end of sequence token, break
 				// TODO: just end this sequence
 				if s.model.TokenIsEog(token) {
-					// TODO: end the sequence instead of quitting the pool
-					s.lc.KvCacheSeqRm(i, 0, -1)
-
 					// TODO (jmorganca): we should send this back
 					// as it's important for the /api/generate context
 					// seq.responses <- piece
 
 					seq.doneReason = "stop"
 					close(seq.responses)
-					seq.samplingCtx.Free()
-					s.mu.Lock()
-					s.seqs[i] = nil
-					s.mu.Unlock()
+					s.cleanup(i)
 					continue
 				}
 
@@ -381,13 +389,9 @@ func (s *Server) run(ctx context.Context) error {
 						seq.responses <- p
 					}
 
-					s.lc.KvCacheSeqRm(i, 0, -1)
 					seq.doneReason = "stop"
 					close(seq.responses)
-					seq.samplingCtx.Free()
-					s.mu.Lock()
-					s.seqs[i] = nil
-					s.mu.Unlock()
+					s.cleanup(i)
 					continue
 				}
 
@@ -476,9 +480,11 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 
 	// TODO (jmorganca): add to sequence queue instead of
 	// failing if a slot isn't available
+	var seqId int
 	s.mu.Lock()
 	for i, sq := range s.seqs {
 		if sq == nil {
+			seqId = i
 			s.seqs[i] = seq
 			s.cond.Signal()
 			break
@@ -492,9 +498,11 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+main:
 	for {
 		select {
 		case <-r.Context().Done():
+			s.cleanup(seqId)
 			return
 		case content, ok := <-seq.responses:
 			if !ok {
@@ -511,8 +519,9 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, fmt.Sprintf("failed to encode final response: %v", err), http.StatusInternalServerError)
 					return
 				}
+				flusher.Flush()
 
-				return
+				break main
 			}
 
 			if err := json.NewEncoder(w).Encode(&CompletionResponse{
@@ -521,7 +530,6 @@ func (s *Server) completion(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, fmt.Sprintf("failed to encode response: %v", err), http.StatusInternalServerError)
 				return
 			}
-
 			flusher.Flush()
 		}
 	}
@@ -625,6 +633,10 @@ func main() {
 	noMmap := flag.Bool("no-mmap", false, "do not memory-map model (slower load but may reduce pageouts if not using mlock)")
 	mlock := flag.Bool("mlock", false, "force system to keep model in RAM rather than swapping or compressing")
 	tensorSplit := flag.String("tensor-split", "", "fraction of the model to offload to each GPU, comma-separated list of proportions")
+
+	if *parallel > 1 && *ppath != "" {
+		log.Fatal("parallel mode not supported with projector")
+	}
 
 	flag.Parse()
 	level := slog.LevelInfo

@@ -706,7 +706,6 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		// TODO (jmorganca): handle this better
 		err := server.run(ctx)
 		if err != nil {
 			slog.Error("fatal error encountered", "error", err)

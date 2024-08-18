@@ -219,7 +219,7 @@ func (s *Server) waiting() bool {
 // TODO (jmorganca): process image embeddings in parallel since this calls
 // llama_decode separately from the main loop in run below
 func (s *Server) processImage() bool {
-	for i, seq := range s.seqs {
+	for _, seq := range s.seqs {
 		if seq == nil {
 			continue
 		}

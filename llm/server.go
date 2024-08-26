@@ -254,6 +254,10 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 		params = append(params, "--threads", strconv.Itoa(opts.NumThread))
 	}
 
+	if !opts.F16KV && envconfig.CacheTypeK() == "" && envconfig.CacheTypeV() == "" {
+		params = append(params, "--memory-f32")
+	}
+
 	flashAttnEnabled := envconfig.FlashAttention()
 
 	for _, g := range gpus {

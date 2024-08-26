@@ -88,5 +88,14 @@ func GetCPUMem() (memInfo, error) {
 	} else {
 		mem.FreeMemory = (free + buffers + cached) * format.KibiByte
 	}
+
+	//subtract AMD APU memory form system RAM
+	amdGPUs := AMDGetGPUInfo()
+	for _, gpuInfo := range amdGPUs {
+		if gpuInfo.ApuUseGTT {
+			mem.TotalMemory -= gpuInfo.TotalMemory
+			mem.FreeMemory -= gpuInfo.FreeMemory
+		}
+	}
 	return mem, nil
 }

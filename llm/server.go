@@ -82,7 +82,12 @@ func LoadModel(model string, maxArraySize int) (*GGML, error) {
 }
 
 // setCacheTypeParams sets the K/V cache type parameters if specified
-func setCacheTypeParams(params *[]string, flashAttnEnabled bool) {
+func setCacheTypeParams(params *[]string, flashAttnEnabled bool, opts api.Options) {
+	// if the cache types are both empty and opts.F16KV is not set, don't set any cache types
+	if envconfig.CacheTypeK() == "" && envconfig.CacheTypeV() == "" && !opts.F16KV {
+		return
+	}
+
 	// K/V cache quantization types supported by llama.cpp server
 	validKVCacheTypes := map[string]bool{
 		"f16": true, "f32": true, "q8_0": true, "q4_0": true,
@@ -279,7 +284,7 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 		params = append(params, "--flash-attn")
 	}
 
-	setCacheTypeParams(&params, flashAttnEnabled)
+	setCacheTypeParams(&params, flashAttnEnabled, opts)
 
 	// Windows CUDA should not use mmap for best performance
 	// Linux  with a model larger than free space, mmap leads to thrashing

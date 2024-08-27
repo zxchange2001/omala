@@ -13,10 +13,10 @@ import "C"
 import (
 	"fmt"
 	"log/slog"
-	"unsafe"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strings"
+	"unsafe"
 )
 
 var AscendLinuxGlobs = []string{
@@ -85,4 +85,17 @@ func LoadAscendMgmt(ascendLibPath []string) (int, *C.ascend_handle_t, string) {
 		}
 	}
 	return 0, nil, ""
+}
+
+func ascendGetVisibleDevicesEnv(gpuInfo []GpuInfo) (string, string) {
+	ids := []string{}
+	for _, info := range gpuInfo {
+		if info.Library != "ascend" {
+			// TODO shouldn't happen if things are wired correctly...
+			slog.Debug("ascendGetVisibleDevicesEnv skipping over non-ascend device", "library", info.Library)
+			continue
+		}
+		ids = append(ids, info.ID)
+	}
+	return "ASCEND_RT_VISIBLE_DEVICES", strings.Join(ids, ",")
 }

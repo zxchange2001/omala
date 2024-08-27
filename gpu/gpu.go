@@ -553,6 +553,8 @@ func FindGPULibs(baseLibName string, defaultPatterns []string) []string {
 			var err error
 			for ; err == nil; tmp, err = os.Readlink(libPath) {
 				if !filepath.IsAbs(tmp) {
+					// Resolve possible Symlinks in libPath
+					libPath, _ = filepath.EvalSymlinks(libPath)
 					tmp = filepath.Join(filepath.Dir(libPath), tmp)
 				}
 				libPath = tmp
@@ -683,6 +685,8 @@ func (l GpuInfoList) GetVisibleDevicesEnv() (string, string) {
 		return rocmGetVisibleDevicesEnv(l)
 	case "oneapi":
 		return oneapiGetVisibleDevicesEnv(l)
+	case "ascend":
+		return ascendGetVisibleDevicesEnv(l)
 	default:
 		slog.Debug("no filter required for library " + l[0].Library)
 		return "", ""

@@ -318,7 +318,7 @@ func AMDGetGPUInfo() []RocmGPUInfo {
 				continue
 			}
 
-			ApuUseGTT, err := GTTmemoryOnAPU(fmt.Sprintf("gfx%d%x%x", major, minor, patch))
+			ApuUseGTT, err = GTTmemoryOnAPU(fmt.Sprintf("gfx%d%x%x", major, minor, patch))
 			if err != nil {
 				slog.Debug("Error:", err)
 				continue

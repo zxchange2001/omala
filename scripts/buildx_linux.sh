@@ -14,7 +14,7 @@ docker buildx build \
         --platform=${PLATFORM} \
         ${OLLAMA_COMMON_BUILD_ARGS} \
         --target dist \
-        -f Dockerfile \
+        -f Dockerfile${NEW_MAKEFILE} \
         .
 
 # Move the bundles to the expected location

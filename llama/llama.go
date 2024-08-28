@@ -30,9 +30,11 @@ package llama
 #cgo rocm CFLAGS: -DGGML_USE_CUDA -DGGML_USE_HIPBLAS -DGGML_CUDA_DMMV_X=32 -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128 -DGGML_CUDA_MMV_Y=1 -DGGML_BUILD=1
 #cgo rocm CXXFLAGS: -DGGML_USE_CUDA -DGGML_USE_HIPBLAS -DGGML_CUDA_DMMV_X=32 -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128 -DGGML_CUDA_MMV_Y=1 -DGGML_BUILD=1
 #cgo rocm LDFLAGS: -L${SRCDIR} -lggml_hipblas -lhipblas -lamdhip64 -lrocblas
-#cgo windows,cuda LDFLAGS: -lggml_cuda -lcuda -lcudart -lcublas -lcublasLt
+#cgo cuda11 LDFLAGS: -lggml_cuda_v11 -L/usr/local/cuda-11/lib64
+#cgo cuda12 LDFLAGS: -lggml_cuda_v12 -L/usr/local/cuda-12/lib64
+#cgo windows,cuda LDFLAGS: -lcuda -lcudart -lcublas -lcublasLt
 #cgo windows,rocm LDFLAGS: -lggml_hipblas -lhipblas -lamdhip64 -lrocblas
-#cgo linux,cuda LDFLAGS: -L/usr/local/cuda/lib64 -lggml_cuda -lcuda -lcudart -lcublas -lcublasLt -lpthread -ldl -lrt
+#cgo linux,cuda LDFLAGS: -lcuda -lcudart -lcublas -lcublasLt -lpthread -ldl -lrt -lresolv
 #cgo linux,rocm LDFLAGS: -L/opt/rocm/lib
 
 #include <stdlib.h>

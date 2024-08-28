@@ -13,7 +13,7 @@ docker buildx build \
     --push \
     --platform=${PLATFORM} \
     ${OLLAMA_COMMON_BUILD_ARGS} \
-    -f Dockerfile \
+    -f Dockerfile${NEW_MAKEFILE} \
     -t ${RELEASE_IMAGE_REPO}:$VERSION \
     .
 
@@ -22,6 +22,6 @@ docker buildx build \
     --platform=linux/amd64 \
     ${OLLAMA_COMMON_BUILD_ARGS} \
     --target runtime-rocm \
-    -f Dockerfile \
+    -f Dockerfile${NEW_MAKEFILE} \
     -t ${RELEASE_IMAGE_REPO}:$VERSION-rocm \
     .

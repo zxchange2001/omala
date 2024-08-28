@@ -13,7 +13,7 @@ for TARGETARCH in ${BUILD_ARCH}; do
         --platform=linux/$TARGETARCH \
         ${OLLAMA_COMMON_BUILD_ARGS} \
         --target build-$TARGETARCH \
-        -f Dockerfile \
+        -f Dockerfile${NEW_MAKEFILE} \
         -t builder:$TARGETARCH \
         .
     docker create --platform linux/$TARGETARCH --name builder-$TARGETARCH builder:$TARGETARCH

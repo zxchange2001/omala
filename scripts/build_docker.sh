@@ -26,7 +26,7 @@ if [ -z "${OLLAMA_SKIP_IMAGE_BUILD}" ]; then
             ${LOAD_OR_PUSH} \
             --platform=linux/${TARGETARCH} \
             ${OLLAMA_COMMON_BUILD_ARGS} \
-            -f Dockerfile \
+            -f Dockerfile${NEW_MAKEFILE} \
             -t ${RELEASE_IMAGE_REPO}:$VERSION-${TARGETARCH} \
             .
     done
@@ -37,7 +37,7 @@ if [ -z "${OLLAMA_SKIP_IMAGE_BUILD}" ]; then
             --platform=linux/amd64 \
             ${OLLAMA_COMMON_BUILD_ARGS} \
             --target runtime-rocm \
-            -f Dockerfile \
+            -f Dockerfile${NEW_MAKEFILE} \
             -t ${RELEASE_IMAGE_REPO}:$VERSION-rocm \
             .
     fi

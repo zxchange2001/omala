@@ -209,7 +209,6 @@ func AsMap() map[string]EnvVar {
 		"OLLAMA_NOHISTORY":         {"OLLAMA_NOHISTORY", NoHistory(), "Do not preserve readline history"},
 		"OLLAMA_NOPRUNE":           {"OLLAMA_NOPRUNE", NoPrune(), "Do not prune model blobs on startup"},
 		"OLLAMA_NUM_PARALLEL":      {"OLLAMA_NUM_PARALLEL", NumParallel(), "Maximum number of parallel requests"},
-		"OLLAMA_NEW_RUNNERS":       {"OLLAMA_NEW_RUNNERS", NewRunners(), "Enable new experimental runners"},
 		"OLLAMA_ORIGINS":           {"OLLAMA_ORIGINS", Origins(), "A comma separated list of allowed origins"},
 		"OLLAMA_SCHED_SPREAD":      {"OLLAMA_SCHED_SPREAD", SchedSpread(), "Always schedule model across all GPUs"},
 		"OLLAMA_TMPDIR":            {"OLLAMA_TMPDIR", TmpDir(), "Location for temporary files"},
@@ -236,4 +235,13 @@ func Values() map[string]string {
 // Var returns an environment variable stripped of leading and trailing quotes or spaces
 func Var(key string) string {
 	return strings.Trim(strings.TrimSpace(os.Getenv(key)), "\"'")
+}
+
+// On windows, we keep the binary at the top directory, but
+// other platforms use a "bin" directory, so this returns ".."
+func LibRelativeToExe() string {
+	if runtime.GOOS == "windows" {
+		return "."
+	}
+	return ".."
 }

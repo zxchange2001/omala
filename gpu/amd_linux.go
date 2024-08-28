@@ -343,12 +343,30 @@ func AMDGetGPUInfo() []RocmGPUInfo {
 			}
 			usedFile = filepath.Join(devDir, DRMUsedMemoryFile)
 			if ApuUseGTT {
-				slog.Debug("AMD APU valid to use GTT memory")
 				usedFile = filepath.Join(devDir, DRMUsedMemoryFileGTT)
 			}
 			usedMemory, err = getFreeMemory(usedFile)
 			if err != nil {
 				slog.Debug("failed to update used memory", "error", err)
+			}
+			if ApuUseGTT {
+				totalFileVram := filepath.Join(devDir, DRMTotalMemoryFile)
+				buf, err := os.ReadFile(totalFileVram)
+				if err != nil {
+					slog.Debug("failed to read sysfs node", "file", totalFileVram, "error", err)
+					break
+				}
+				totalMemoryVram, err := strconv.ParseUint(strings.TrimSpace(string(buf)), 10, 64)
+				if err != nil {
+					slog.Debug("failed to parse sysfs node", "file", totalFileVram, "error", err)
+					break
+				}
+				if totalMemoryVram > 2147483648 {
+					slog.Info("For best performance set APU VRAM carveout to <=2GiB")
+				}
+				if totalMemoryVram > totalMemory {
+					slog.Warn("VRAM exceds GTT. Decrese VRAM carveout to increase GTT space avaliable for LLM")
+				}
 			}
 			break
 		}

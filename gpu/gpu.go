@@ -444,7 +444,7 @@ func GetGPUInfo() GpuInfoList {
 			slog.Debug("problem refreshing ROCm free memory", "error", err)
 		}
 	}
-
+	// Don't use  AMD APU if system has discrete graphics
 	if len(cudaGPUs)+len(rocmGPUs)+len(oneapiGPUs) > 1 {
 		// Filter CUDA GPUs
 		filteredCudaGPUs := make([]CudaGPUInfo, 0, len(cudaGPUs))

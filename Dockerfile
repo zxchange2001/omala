@@ -110,9 +110,6 @@ ARG CGO_CFLAGS
 ENV GOARCH amd64 
 WORKDIR /go/src/github.com/ollama/ollama/llm/generate
 
-FROM --platform=linux/amd64 cpu-builder-amd64 AS static-build-amd64
-RUN --mount=type=cache,target=/root/.ccache \
-    OLLAMA_CPU_TARGET="static" bash gen_linux.sh
 FROM --platform=linux/amd64 cpu-builder-amd64 AS cpu-build-amd64
 RUN --mount=type=cache,target=/root/.ccache \
     OLLAMA_SKIP_STATIC_GENERATE=1 OLLAMA_CPU_TARGET="cpu" bash gen_linux.sh
@@ -135,9 +132,6 @@ ARG CGO_CFLAGS
 ENV GOARCH arm64
 WORKDIR /go/src/github.com/ollama/ollama/llm/generate
 
-FROM --platform=linux/arm64 cpu-builder-arm64 AS static-build-arm64
-RUN --mount=type=cache,target=/root/.ccache \
-    OLLAMA_CPU_TARGET="static" bash gen_linux.sh
 FROM --platform=linux/arm64 cpu-builder-arm64 AS cpu-build-arm64
 RUN --mount=type=cache,target=/root/.ccache \
     OLLAMA_SKIP_STATIC_GENERATE=1 OLLAMA_CPU_TARGET="cpu" bash gen_linux.sh
@@ -148,7 +142,6 @@ FROM --platform=linux/amd64 cpu-build-amd64 AS build-amd64
 ENV CGO_ENABLED 1
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
-COPY --from=static-build-amd64 /go/src/github.com/ollama/ollama/llm/build/ llm/build/
 COPY --from=cpu_avx-build-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 COPY --from=cpu_avx2-build-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 COPY --from=cuda-11-build-amd64 /go/src/github.com/ollama/ollama/dist/ dist/
@@ -171,7 +164,6 @@ ENV CGO_ENABLED 1
 ARG GOLANG_VERSION
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
-COPY --from=static-build-arm64 /go/src/github.com/ollama/ollama/llm/build/ llm/build/
 COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
 COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 COPY --from=cuda-12-build-server-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
@@ -191,7 +183,7 @@ FROM dist-$TARGETARCH as dist
 
 
 # Optimized container images do not cary nested payloads
-FROM --platform=linux/amd64 static-build-amd64 as container-build-amd64
+FROM --platform=linux/amd64 cpu-builder-amd64 as container-build-amd64
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
 ARG GOFLAGS
@@ -201,7 +193,7 @@ RUN --mount=type=cache,target=/root/.ccache \
     touch payloads/build/linux/amd64/NO_PAYLOAD/NO_PAYLOAD && \
     go build -trimpath -o dist/linux-amd64/bin/ollama .
 
-FROM --platform=linux/arm64 static-build-arm64 as container-build-arm64
+FROM --platform=linux/arm64 cpu-builder-arm64 as container-build-arm64
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
 ARG GOFLAGS

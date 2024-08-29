@@ -1,3 +1,4 @@
+# Note: once we have fully transitioned to the Go server, this will replace the old Dockerfile
 ARG GOLANG_VERSION=1.22.5
 ARG CMAKE_VERSION=3.22.1
 ARG CUDA_VERSION_11=11.3.1
@@ -6,7 +7,6 @@ ARG CUDA_VERSION_12=12.4.0
 ARG CUDA_V12_ARCHITECTURES="60;61;62;70;72;75;80;86;87;89;90;90a"
 ARG ROCM_VERSION=6.1.2
 
-
 ### To create a local image for building linux binaries on mac or windows with efficient incremental builds
 #
 # docker build --platform linux/amd64 -t builder-amd64 -f Dockerfile.new --target unified-builder-amd64 .
@@ -14,7 +14,7 @@ ARG ROCM_VERSION=6.1.2
 #
 ### Then incremental builds will be much faster in this container
 #
-# go generate ./... && make -C llama -j 10 && go build -trimpath -o dist/linux-amd64/ollama . && tar -C dist/linux-amd64 -cf - . | xz -9 > dist/ollama-linux-amd64.tar.xz
+# make -C llama -j 10 && go build -trimpath -o dist/linux-amd64/ollama .
 #
 FROM --platform=linux/amd64 rocm/dev-centos-7:${ROCM_VERSION}-complete as unified-builder-amd64
 ARG CMAKE_VERSION
@@ -34,6 +34,7 @@ ENV PATH /opt/rh/devtoolset-10/root/usr/bin:$PATH:/usr/local/cuda/bin
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda/lib64
 ENV LIBRARY_PATH=/usr/local/cuda/lib64/stubs:/opt/amdgpu/lib64
 ENV GOARCH amd64
+ENV CGO_ENABLED 1
 WORKDIR /go/src/github.com/ollama/ollama/
 ENTRYPOINT [ "zsh" ]
 
@@ -61,6 +62,7 @@ ENV PATH /opt/rh/gcc-toolset-10/root/usr/bin:$PATH:/usr/local/cuda/bin
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda/lib64
 ENV LIBRARY_PATH=/usr/local/cuda/lib64/stubs:/opt/amdgpu/lib64
 ENV GOARCH amd64
+ENV CGO_ENABLED 1
 WORKDIR /go/src/github.com/ollama/ollama/
 ENTRYPOINT [ "zsh" ]
 
@@ -81,48 +83,20 @@ ARG OLLAMA_SKIP_CUDA_12_GENERATE
 RUN --mount=type=cache,target=/root/.ccache \
     make -C llama -j 8
 
-# Temporary until the LCD CPU build is shifted over
-FROM --platform=linux/amd64 centos:7 AS static-builder-amd64
+
+# Intermediate stages used for ./scripts/build_linux.sh
+FROM --platform=linux/amd64 centos:7 AS builder-amd64
 ARG CMAKE_VERSION
 ARG GOLANG_VERSION
 COPY ./scripts/rh_linux_deps.sh /
 RUN CMAKE_VERSION=${CMAKE_VERSION} GOLANG_VERSION=${GOLANG_VERSION} sh /rh_linux_deps.sh
 ENV PATH /opt/rh/devtoolset-10/root/usr/bin:$PATH
-WORKDIR /go/src/github.com/ollama/ollama
-COPY . .
-ARG OLLAMA_CUSTOM_CPU_DEFS
-ARG CGO_CFLAGS
-ENV GOARCH amd64 
-WORKDIR /go/src/github.com/ollama/ollama/llm/generate
-
-FROM --platform=linux/amd64 static-builder-amd64 AS static-build-amd64
-RUN --mount=type=cache,target=/root/.ccache \
-    OLLAMA_CPU_TARGET="static" bash gen_linux.sh
-
-FROM --platform=linux/arm64 rockylinux:8 AS static-builder-arm64
-ARG CMAKE_VERSION
-ARG GOLANG_VERSION
-COPY ./scripts/rh_linux_deps.sh /
-RUN CMAKE_VERSION=${CMAKE_VERSION} GOLANG_VERSION=${GOLANG_VERSION} sh /rh_linux_deps.sh
-ENV PATH /opt/rh/gcc-toolset-10/root/usr/bin:$PATH
-WORKDIR /go/src/github.com/ollama/ollama
-COPY . .
-ARG OLLAMA_CUSTOM_CPU_DEFS
-ARG CGO_CFLAGS
-ENV GOARCH arm64
-WORKDIR /go/src/github.com/ollama/ollama/llm/generate
-
-FROM --platform=linux/arm64 static-builder-arm64 AS static-build-arm64
-RUN --mount=type=cache,target=/root/.ccache \
-    OLLAMA_CPU_TARGET="static" bash gen_linux.sh
-
-
-# Intermediate stages used for ./scripts/build_linux.sh
-FROM --platform=linux/amd64 static-build-amd64 AS build-amd64
 ENV CGO_ENABLED 1
+ENV GOARCH amd64
 WORKDIR /go/src/github.com/ollama/ollama
+
+FROM --platform=linux/amd64 builder-amd64 AS build-amd64
 COPY . .
-COPY --from=static-build-amd64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
 COPY --from=runners-amd64 /go/src/github.com/ollama/ollama/dist/ dist/
 COPY --from=runners-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 ARG GOFLAGS
@@ -137,12 +111,18 @@ RUN if [ -z ${OLLAMA_SKIP_ROCM_GENERATE} ] ; then \
     tar -cf - . | pigz --best > ../ollama-linux-$GOARCH-rocm.tgz ;\
     fi
 
-FROM --platform=linux/arm64 static-build-arm64 AS build-arm64
-ENV CGO_ENABLED 1
+FROM --platform=linux/arm64 rockylinux:8 AS builder-arm64
+ARG CMAKE_VERSION
 ARG GOLANG_VERSION
+COPY ./scripts/rh_linux_deps.sh /
+RUN CMAKE_VERSION=${CMAKE_VERSION} GOLANG_VERSION=${GOLANG_VERSION} sh /rh_linux_deps.sh
+ENV PATH /opt/rh/gcc-toolset-10/root/usr/bin:$PATH
+ENV CGO_ENABLED 1
+ENV GOARCH arm64
 WORKDIR /go/src/github.com/ollama/ollama
+
+FROM --platform=linux/arm64 builder-arm64 AS build-arm64
 COPY . .
-COPY --from=static-build-arm64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
 COPY --from=runners-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
 COPY --from=runners-arm64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 ARG GOFLAGS
@@ -160,7 +140,7 @@ FROM dist-$TARGETARCH as dist
 
 
 # Optimized container images do not cary nested payloads
-FROM --platform=linux/amd64 static-build-amd64 as container-build-amd64
+FROM --platform=linux/amd64 builder-amd64 as container-build-amd64
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
 ARG GOFLAGS
@@ -170,7 +150,7 @@ RUN --mount=type=cache,target=/root/.ccache \
     touch payloads/build/linux/amd64/NO_PAYLOAD/NO_PAYLOAD && \
     go build -trimpath -o dist/linux-amd64/bin/ollama .
 
-FROM --platform=linux/arm64 static-build-arm64 as container-build-arm64
+FROM --platform=linux/arm64 builder-arm64 as container-build-arm64
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
 ARG GOFLAGS

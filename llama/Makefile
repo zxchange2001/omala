@@ -71,7 +71,7 @@ ifeq ($(OS),windows)
 	CP := cp
 	CUDA_LIBS = $(wildcard $(addsuffix 64*.$(SHARED_EXT),$(addprefix $(CUDA_LIB_DIR)/$(SHARED_PREFIX),$(CUDA_LIBS_SHORT))))
 else ifeq ($(OS),linux)
-	CP := cp -a
+	CP := cp -af
 	OBJ_EXT := o
 	SHARED_EXT := so
 	SHARED_PREFIX := lib
@@ -86,7 +86,7 @@ else ifeq ($(OS),linux)
 else
 	OBJ_EXT := o
 	SHARED_EXT := so
-	CP := cp -a
+	CP := cp -af
 endif
 
 CUDA_11_LIBS = $(wildcard $(addsuffix .$(SHARED_EXT).*,$(addprefix $(CUDA_11_LIB_DIR)/$(SHARED_PREFIX),$(CUDA_LIBS_SHORT))))

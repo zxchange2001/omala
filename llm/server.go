@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/semaphore"
@@ -27,6 +28,7 @@ import (
 	"github.com/ollama/ollama/envconfig"
 	"github.com/ollama/ollama/format"
 	"github.com/ollama/ollama/gpu"
+	"github.com/ollama/ollama/llama"
 	"github.com/ollama/ollama/payloads"
 )
 
@@ -52,7 +54,8 @@ type llmServer struct {
 	options     api.Options
 	numParallel int
 	modelPath   string
-	model       *loadedModel // If non-nil, the runner is a new Go server
+	modelLock   sync.Mutex         // Temporary until we switch fully to Go server
+	model       *llama.LoadedModel // If non-nil, the runner is a new Go server
 
 	estimate    MemoryEstimate
 	totalLayers uint64
@@ -949,7 +952,7 @@ type TokenizeResponse struct {
 
 func (s *llmServer) Tokenize(ctx context.Context, content string) ([]int, error) {
 	if s.model != nil {
-		return tokenize(s.model, content)
+		return llama.Tokenize(s.model, content)
 	}
 
 	// Make sure the server is ready
@@ -977,12 +980,16 @@ func (s *llmServer) Tokenize(ctx context.Context, content string) ([]int, error)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 {
-		slog.Debug("new runner detected, loading model for cgo tokenization")
-		m, err := loadModel(s.modelPath, true)
-		if err != nil {
-			return nil, fmt.Errorf("unable to load model for tokenization %w", err)
+		s.modelLock.Lock()
+		defer s.modelLock.Unlock()
+		if s.model == nil {
+			slog.Debug("new runner detected, loading model for cgo tokenization")
+			m, err := llama.LoadModel(s.modelPath, true)
+			if err != nil {
+				return nil, fmt.Errorf("unable to load model for tokenization %w", err)
+			}
+			s.model = m
 		}
-		s.model = m
 		return s.Tokenize(ctx, content)
 	}
 
@@ -1014,7 +1021,7 @@ type DetokenizeResponse struct {
 
 func (s *llmServer) Detokenize(ctx context.Context, tokens []int) (string, error) {
 	if s.model != nil {
-		return detokenize(s.model, tokens), nil
+		return llama.Detokenize(s.model, tokens), nil
 	}
 	// Make sure the server is ready
 	status, err := s.getServerStatus(ctx)
@@ -1041,12 +1048,16 @@ func (s *llmServer) Detokenize(ctx context.Context, tokens []int) (string, error
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 {
-		slog.Debug("new runner detected, loading model for cgo tokenization")
-		m, err := loadModel(s.modelPath, true)
-		if err != nil {
-			return "", fmt.Errorf("unable to load model for tokenization %w", err)
+		s.modelLock.Lock()
+		defer s.modelLock.Unlock()
+		if s.model == nil {
+			slog.Debug("new runner detected, loading model for cgo tokenization")
+			m, err := llama.LoadModel(s.modelPath, true)
+			if err != nil {
+				return "", fmt.Errorf("unable to load model for tokenization %w", err)
+			}
+			s.model = m
 		}
-		s.model = m
 		return s.Detokenize(ctx, tokens)
 	}
 
@@ -1070,7 +1081,7 @@ func (s *llmServer) Detokenize(ctx context.Context, tokens []int) (string, error
 
 func (s *llmServer) Close() error {
 	if s.model != nil {
-		freeModel(s.model)
+		llama.FreeModel(s.model)
 		s.model = nil
 	}
 	if s.cmd != nil {

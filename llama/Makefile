@@ -16,6 +16,8 @@ endif
 comma:= ,
 empty:=
 space:= $(empty) $(empty)
+uc = $(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,$(subst g,G,$(subst h,H,$(subst i,I,$(subst j,J,$(subst k,K,$(subst l,L,$(subst m,M,$(subst n,N,$(subst o,O,$(subst p,P,$(subst q,Q,$(subst r,R,$(subst s,S,$(subst t,T,$(subst u,U,$(subst v,V,$(subst w,W,$(subst x,X,$(subst y,Y,$(subst z,Z,$1))))))))))))))))))))))))))
+
 
 export CGO_CFLAGS_ALLOW = -mfma|-mf16c
 export CGO_CXXFLAGS_ALLOW = -mfma|-mf16c
@@ -30,7 +32,10 @@ RUNNERS_PAYLOAD_DIR = $(abspath $(SRC_DIR)/../payloads/build/$(OS)/$(patsubst am
 RUNNERS_BUILD_DIR = $(BUILD_DIR)/runners
 DEFAULT_RUNNER := $(if $(and $(filter darwin,$(OS)),$(filter arm64,$(ARCH))),metal,cpu)
 GZIP:=$(shell command -v pigz 2>/dev/null || echo "gzip")
-CCACHE:=$(shell command -v ccache 2>/dev/null || echo "")
+ifneq ($(OS),windows)
+	CCACHE:=$(shell command -v ccache 2>/dev/null || echo "")
+endif
+VERSION?=$(shell git describe --tags --first-parent --abbrev=7 --long --dirty --always | sed -e "s/^v//g")
 
 # Conditionally enable ccache for cgo builds too
 ifneq ($(CCACHE),)
@@ -46,8 +51,12 @@ ROCM_LIBS_SHORT := hipblas rocblas
 
 # Override in environment space separated to tune GPU runner CPU vector flags
 ifeq ($(ARCH),amd64)
+# TODO may need a bit more work - setting 'GPU_RUNNER_CPU_FLAGS="avx avx2 avx512f avx512bw"' doesn't yield
+# a system_info showing 'AVX512 = 1' so there may be additional macros that are needed in GGML
 	GPU_RUNNER_CPU_FLAGS ?= avx
 endif
+
+GOFLAGS="-ldflags=-w -s \"-X=github.com/ollama/ollama/version.Version=$(VERSION)\" \"-X=github.com/ollama/ollama/llama.CpuFeatures=$(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS))\" $(TARGET_LDFLAGS)"
 
 ifeq ($(OS),windows)
 	SRC_DIR := $(shell cygpath -m -s "$(SRC_DIR)")
@@ -55,26 +64,32 @@ ifeq ($(OS),windows)
 	SHARED_EXT := dll
 	EXE_EXT := .exe
 	SHARED_PREFIX := 
+	CPU_FLAG_PREFIX := /arch:
 	CUDA_BASE_DIR := $(dir $(shell cygpath -m -s "$(CUDA_PATH)\.."))
 	CUDA_11=$(shell ls -d $(CUDA_BASE_DIR)/v11.? 2>/dev/null)
 	CUDA_12=$(shell ls -d $(CUDA_BASE_DIR)/v12.? 2>/dev/null)
 	CUDA_11_LIB_DIR := $(CUDA_11)/bin
 	CUDA_12_LIB_DIR := $(CUDA_12)/bin
+	CUDA_11_STATIC_LIB_DIR := $(CUDA_11)/lib/x64
+	CUDA_12_STATIC_LIB_DIR := $(CUDA_12)/lib/x64
 	NVCC := $(shell X=$$(which nvcc 2>/dev/null) && cygpath -m -s "$$X")
 	ifneq ($(HIP_PATH),)
 		HIP_LIB_DIR := $(shell cygpath -m -s "$(HIP_PATH)\bin")
 		# If HIP_PATH has spaces, hipcc trips over them when subprocessing
 		HIP_PATH := $(shell cygpath -m -s "$(HIP_PATH)\")
+		HIP_STATIC_LIB_DIR := $(shell cygpath -m -s "$(HIP_PATH)\lib")
 		export HIP_PATH
 		HIPCC := $(HIP_PATH)bin/hipcc.bin.exe
 	endif
 	CP := cp
 	CUDA_LIBS = $(wildcard $(addsuffix 64*.$(SHARED_EXT),$(addprefix $(CUDA_LIB_DIR)/$(SHARED_PREFIX),$(CUDA_LIBS_SHORT))))
+	_OS_GPU_RUNNER_CPU_FLAGS=$(call uc,$(GPU_RUNNER_CPU_FLAGS))
 else ifeq ($(OS),linux)
 	CP := cp -af
 	OBJ_EXT := o
 	SHARED_EXT := so
 	SHARED_PREFIX := lib
+	CPU_FLAG_PREFIX := -m
 	HIP_PATH?=/opt/rocm
 	HIP_LIB_DIR := $(HIP_PATH)/lib
 	HIPCC := $(shell X=$$(which hipcc 2>/dev/null) && echo $$X)
@@ -83,10 +98,13 @@ else ifeq ($(OS),linux)
 	CUDA_12=$(shell ls -d $(CUDA_PATH)-12 2>/dev/null)
 	CUDA_11_LIB_DIR := $(CUDA_11)/lib64
 	CUDA_12_LIB_DIR := $(CUDA_12)/lib64
+	_OS_GPU_RUNNER_CPU_FLAGS=$(GPU_RUNNER_CPU_FLAGS)
 else
 	OBJ_EXT := o
 	SHARED_EXT := so
+	CPU_FLAG_PREFIX := -m
 	CP := cp -af
+	_OS_GPU_RUNNER_CPU_FLAGS=$(GPU_RUNNER_CPU_FLAGS)
 endif
 
 CUDA_11_LIBS = $(wildcard $(addsuffix .$(SHARED_EXT).*,$(addprefix $(CUDA_11_LIB_DIR)/$(SHARED_PREFIX),$(CUDA_LIBS_SHORT))))
@@ -135,7 +153,7 @@ CUDA_SRCS := \
 	$(wildcard ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu) \
 	$(wildcard ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu) \
 	$(wildcard ggml-cuda/template-instances/fattn-vec*f16-f16.cu) \
-	ggml.c ggml-backend.c ggml-alloc.c ggml-quants.c sgemm.cpp
+	ggml.c ggml-backend.c ggml-alloc.c ggml-quants.c sgemm.cpp ggml-aarch64.c
 CUDA_HDRS := \
 	$(wildcard ggml-cuda/*.cuh)
 
@@ -151,6 +169,7 @@ HIP_OBJS := $(HIP_OBJS:.c=.hip.$(OBJ_EXT))
 HIP_OBJS := $(addprefix $(BUILD_DIR)/,$(HIP_OBJS:.cpp=.hip.$(OBJ_EXT)))
 
 CUDA_FLAGS := \
+	-Xcompiler "$(addprefix $(CPU_FLAG_PREFIX),$(_OS_GPU_RUNNER_CPU_FLAGS))" \
 	-t2 \
 	-DGGML_CUDA_DMMV_X=32 \
 	-DGGML_CUDA_PEER_MAX_BATCH_SIZE=128 \
@@ -180,6 +199,7 @@ HIP_ARCHS := gfx900 gfx940 gfx941 gfx942 gfx1010 gfx1012 gfx1030 gfx1100 gfx1101
 LINUX_HIP_ARCHS := gfx906:xnack- gfx908:xnack- gfx90a:xnack+ gfx90a:xnack-
 
 HIP_FLAGS := \
+	$(addprefix -m,$(GPU_RUNNER_CPU_FLAGS)) \
 	-parallel-jobs=2 \
 	-c \
 	-O3 \
@@ -343,27 +363,30 @@ $(ROCM_LIB_DEPS):
 
 $(RUNNERS_BUILD_DIR)/$(DEFAULT_RUNNER)/ollama_llama_server$(EXE_EXT): *.go ./runner/*.go $(COMMON_SRCS) $(COMMON_HDRS)
 	@-mkdir -p $(dir $@)
-	CGO_ENABLED=1 GOARCH=$(ARCH) go build -ldflags "-s -w" -o $@ ./runner
+	CGO_ENABLED=1 GOARCH=$(ARCH) go build $(GOFLAGS) -o $@ ./runner
 
 $(RUNNERS_BUILD_DIR)/cpu_avx/ollama_llama_server$(EXE_EXT): *.go ./runner/*.go $(COMMON_SRCS) $(COMMON_HDRS)
 	@-mkdir -p $(dir $@)
-	CGO_ENABLED=1 GOARCH=$(ARCH) go build -ldflags "-s -w" -tags avx -o $@ ./runner
+	CGO_ENABLED=1 GOARCH=$(ARCH) go build $(GOFLAGS) -tags avx -o $@ ./runner
 
 $(RUNNERS_BUILD_DIR)/cpu_avx2/ollama_llama_server$(EXE_EXT): *.go ./runner/*.go $(COMMON_SRCS) $(COMMON_HDRS)
 	@-mkdir -p $(dir $@)
-	CGO_ENABLED=1 GOARCH=$(ARCH) go build -ldflags "-s -w" -tags avx,avx2 -o $@ ./runner
+	CGO_ENABLED=1 GOARCH=$(ARCH) go build $(GOFLAGS) -tags avx,avx2 -o $@ ./runner
 
+$(RUNNERS_BUILD_DIR)/cuda_v11/ollama_llama_server$(EXE_EXT): TARGET_CGO_LDFLAGS = -L"$(RUNNERS_BUILD_DIR)/cuda_v11/" -L"$(CUDA_11_STATIC_LIB_DIR)"
 $(RUNNERS_BUILD_DIR)/cuda_v11/ollama_llama_server$(EXE_EXT): $(RUNNERS_BUILD_DIR)/cuda_v11/$(SHARED_PREFIX)ggml_cuda_v11.$(SHARED_EXT) *.go ./runner/*.go $(COMMON_SRCS) $(COMMON_HDRS)
 	@-mkdir -p $(dir $@)
-	CGO_ENABLED=1 GOARCH=$(ARCH) CGO_LDFLAGS=-L"$(RUNNERS_BUILD_DIR)/cuda_v11/" go build -ldflags "-s -w" -tags $(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS) cuda cuda11) -o $@ ./runner
+	CGO_ENABLED=1 GOARCH=$(ARCH) CGO_LDFLAGS="$(TARGET_CGO_LDFLAGS)" go build $(GOFLAGS) -tags $(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS) cuda cuda11) -o $@ ./runner
 
+$(RUNNERS_BUILD_DIR)/cuda_v12/ollama_llama_server$(EXE_EXT): TARGET_CGO_LDFLAGS = -L"$(RUNNERS_BUILD_DIR)/cuda_v12/" -L"$(CUDA_12_STATIC_LIB_DIR)"
 $(RUNNERS_BUILD_DIR)/cuda_v12/ollama_llama_server$(EXE_EXT): $(RUNNERS_BUILD_DIR)/cuda_v12/$(SHARED_PREFIX)ggml_cuda_v12.$(SHARED_EXT) *.go ./runner/*.go $(COMMON_SRCS) $(COMMON_HDRS)
 	@-mkdir -p $(dir $@)
-	CGO_ENABLED=1 GOARCH=$(ARCH) CGO_LDFLAGS=-L"$(RUNNERS_BUILD_DIR)/cuda_v12/" go build -ldflags "-s -w" -tags $(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS) cuda cuda12) -o $@ ./runner
+	CGO_ENABLED=1 GOARCH=$(ARCH) CGO_LDFLAGS="$(TARGET_CGO_LDFLAGS)" go build $(GOFLAGS) -tags $(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS) cuda cuda12) -o $@ ./runner
 
+$(RUNNERS_BUILD_DIR)/rocm$(ROCM_VARIANT)/ollama_llama_server$(EXE_EXT): TARGET_CGO_LDFLAGS = -L"$(RUNNERS_BUILD_DIR)/rocm$(ROCM_VARIANT)/" -L"$(HIP_STATIC_LIB_DIR)"
 $(RUNNERS_BUILD_DIR)/rocm$(ROCM_VARIANT)/ollama_llama_server$(EXE_EXT): $(RUNNERS_BUILD_DIR)/rocm$(ROCM_VARIANT)/$(SHARED_PREFIX)ggml_hipblas.$(SHARED_EXT) *.go ./runner/*.go $(COMMON_SRCS) $(COMMON_HDRS)
 	@-mkdir -p $(dir $@)
-	CGO_ENABLED=1 GOARCH=$(ARCH) CGO_LDFLAGS=-L"$(RUNNERS_BUILD_DIR)/rocm$(ROCM_VARIANT)/" go build -ldflags "-s -w" -tags $(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS) rocm) -o $@ ./runner
+	CGO_ENABLED=1 GOARCH=$(ARCH) CGO_LDFLAGS="$(TARGET_CGO_LDFLAGS)" go build $(GOFLAGS) -tags $(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS) rocm) -o $@ ./runner
 
 
 $(ROCBLAS_DEP_MANIFEST):

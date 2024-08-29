@@ -979,7 +979,7 @@ func (s *llmServer) Tokenize(ctx context.Context, content string) ([]int, error)
 		return nil, fmt.Errorf("do encode request: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		s.modelLock.Lock()
 		defer s.modelLock.Unlock()
 		if s.model == nil {
@@ -1047,7 +1047,7 @@ func (s *llmServer) Detokenize(ctx context.Context, tokens []int) (string, error
 		return "", fmt.Errorf("do decode request: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		s.modelLock.Lock()
 		defer s.modelLock.Unlock()
 		if s.model == nil {

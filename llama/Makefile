@@ -8,6 +8,7 @@ ifeq ($(ARCH),aarch64)
 endif
 ifneq (,$(findstring MINGW,$(OS))$(findstring MSYS,$(OS)))
 	OS := windows
+	ARCH := $(shell systeminfo 2>/dev/null | grep "System Type" | grep ARM64 > /dev/null && echo "arm64" || echo "amd64" )
 else ifeq ($(OS),Linux)
 	OS := linux
 else ifeq ($(OS),Darwin)

@@ -287,7 +287,7 @@ Installing multiple GPUs of the same brand can be a great way to increase your a
 
 The K/V context cache can be quantized to significantly reduce memory usage when Flash Attention is enabled.
 
-To use quantized k/v cache with Ollama you can set the following environment variables:
+To use quantized K/V cache with Ollama you can set the following environment variables:
 
 - `OLLAMA_CACHE_TYPE_K` - The quantization type for the key cache.  Default is `f16`.
 - `OLLAMA_CACHE_TYPE_V` - The quantization type for the value cache.  Default is `f16`.

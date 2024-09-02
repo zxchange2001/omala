@@ -148,15 +148,25 @@ COMMON_HDRS := \
 
 CUDA_SRCS := \
 	ggml-cuda.cu \
-	$(wildcard ggml-cuda/*.cu) \
-	$(wildcard ggml-cuda/template-instances/fattn-wmma*.cu) \
+	$(filter-out $(wildcard ggml-cuda/fattn*.cu),$(wildcard ggml-cuda/*.cu)) \
 	$(wildcard ggml-cuda/template-instances/mmq*.cu) \
-	$(wildcard ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu) \
-	$(wildcard ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu) \
-	$(wildcard ggml-cuda/template-instances/fattn-vec*f16-f16.cu) \
 	ggml.c ggml-backend.c ggml-alloc.c ggml-quants.c sgemm.cpp ggml-aarch64.c
 CUDA_HDRS := \
 	$(wildcard ggml-cuda/*.cuh)
+
+# Conditional flags and components to speed up developer builds
+ifneq ($(OLLAMA_FAST_BUILD),)
+	CUDA_FLAGS += 	\
+		-DGGML_DISABLE_FLASH_ATTN
+else
+	CUDA_SRCS += \
+		$(wildcard ggml-cuda/fattn*.cu) \
+		$(wildcard ggml-cuda/template-instances/fattn-wmma*.cu) \
+		$(wildcard ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu) \
+		$(wildcard ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu) \
+		$(wildcard ggml-cuda/template-instances/fattn-vec*f16-f16.cu)
+endif
+
 
 CUDA_11_OBJS := $(CUDA_SRCS:.cu=.cuda.$(OBJ_EXT))
 CUDA_11_OBJS := $(CUDA_11_OBJS:.c=.cuda.$(OBJ_EXT))

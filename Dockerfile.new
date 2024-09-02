@@ -72,14 +72,24 @@ ARG OLLAMA_SKIP_CUDA_GENERATE
 ARG OLLAMA_SKIP_CUDA_11_GENERATE
 ARG OLLAMA_SKIP_CUDA_12_GENERATE
 ARG OLLAMA_SKIP_ROCM_GENERATE
+ARG CUDA_V11_ARCHITECTURES
+ARG CUDA_V12_ARCHITECTURES
+ARG OLLAMA_FAST_BUILD
 RUN --mount=type=cache,target=/root/.ccache \
-    make -C llama -j 4
+    if grep "^flags" /proc/cpuinfo|grep avx>/dev/null; then \
+        make -C llama -j $(expr $(nproc) / 2 ) ; \
+    else \
+        make -C llama -j 5 ; \
+    fi
 
 FROM --platform=linux/arm64 unified-builder-arm64 as runners-arm64
 COPY . .
 ARG OLLAMA_SKIP_CUDA_GENERATE
 ARG OLLAMA_SKIP_CUDA_11_GENERATE
 ARG OLLAMA_SKIP_CUDA_12_GENERATE
+ARG CUDA_V11_ARCHITECTURES
+ARG CUDA_V12_ARCHITECTURES
+ARG OLLAMA_FAST_BUILD
 RUN --mount=type=cache,target=/root/.ccache \
     make -C llama -j 8
 

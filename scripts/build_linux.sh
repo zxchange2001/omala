@@ -18,7 +18,7 @@ for TARGETARCH in ${BUILD_ARCH}; do
         .
     docker create --platform linux/$TARGETARCH --name builder-$TARGETARCH builder:$TARGETARCH
     docker cp builder-$TARGETARCH:/go/src/github.com/ollama/ollama/dist/ollama-linux-$TARGETARCH.tgz ./dist/
-    if echo ${TARGETARCH} | grep "amd64" > /dev/null; then
+    if echo ${TARGETARCH} | grep "amd64" > /dev/null && [ -z ${OLLAMA_SKIP_ROCM_GENERATE} ]; then
         docker cp builder-$TARGETARCH:/go/src/github.com/ollama/ollama/dist/ollama-linux-$TARGETARCH-rocm.tgz ./dist/
     fi
     docker rm builder-$TARGETARCH

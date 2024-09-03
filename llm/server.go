@@ -240,6 +240,12 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 		}
 	}
 
+	// Check if the model is an embedding model
+	isEmbeddingModel := false
+	if _, ok := ggml.KV()[fmt.Sprintf("%s.pooling_type", ggml.KV().Architecture())]; ok {
+		isEmbeddingModel = true
+	}
+
 	validKVCacheTypes := map[string]bool{
 		"f16": true, "f32": true, "q8_0": true, "q4_0": true,
 	}
@@ -250,9 +256,15 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 			return
 		}
 
-		// Check if the cache type is valid
 		if !validKVCacheTypes[cacheType] {
 			slog.Warn("invalid cache type", "param", paramName, "type", cacheType)
+			return
+		}
+
+		// For embedding models, only allow f16 and f32
+		if isEmbeddingModel && cacheType != "f16" && cacheType != "f32" {
+			slog.Warn("embedding model only supports f16 and f32 cache types, ignoring",
+				"param", paramName, "type", cacheType)
 			return
 		}
 

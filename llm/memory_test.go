@@ -135,6 +135,7 @@ func TestEstimateKvCacheSize(t *testing.T) {
 		blockCount         uint64
 		embeddingHeadCount uint64
 		headCountKV        uint64
+		isEmbeddingModel   bool
 		expected           uint64
 	}{
 		{
@@ -144,6 +145,7 @@ func TestEstimateKvCacheSize(t *testing.T) {
 			blockCount:         32,
 			embeddingHeadCount: 32,
 			headCountKV:        32,
+			isEmbeddingModel:   false,
 			expected:           134217728, // 128 MB
 		},
 		{
@@ -153,6 +155,7 @@ func TestEstimateKvCacheSize(t *testing.T) {
 			blockCount:         32,
 			embeddingHeadCount: 32,
 			headCountKV:        32,
+			isEmbeddingModel:   false,
 			expected:           67108864, // 64 MB
 		},
 		{
@@ -162,6 +165,7 @@ func TestEstimateKvCacheSize(t *testing.T) {
 			blockCount:         32,
 			embeddingHeadCount: 32,
 			headCountKV:        32,
+			isEmbeddingModel:   false,
 			expected:           16777216, // 16 MB
 		},
 		{
@@ -171,6 +175,7 @@ func TestEstimateKvCacheSize(t *testing.T) {
 			blockCount:         32,
 			embeddingHeadCount: 32,
 			headCountKV:        32,
+			isEmbeddingModel:   false,
 			expected:           33554432, // 32 MB
 		},
 		{
@@ -180,6 +185,7 @@ func TestEstimateKvCacheSize(t *testing.T) {
 			blockCount:         32,
 			embeddingHeadCount: 32,
 			headCountKV:        32,
+			isEmbeddingModel:   false,
 			expected:           67108864, // 64 MB (defaults to f16)
 		},
 		{
@@ -189,6 +195,7 @@ func TestEstimateKvCacheSize(t *testing.T) {
 			blockCount:         32,
 			embeddingHeadCount: 32,
 			headCountKV:        32,
+			isEmbeddingModel:   false,
 			expected:           67108864, // 64 MB (defaults to f16)
 		},
 		{
@@ -198,13 +205,34 @@ func TestEstimateKvCacheSize(t *testing.T) {
 			blockCount:         32,
 			embeddingHeadCount: 32,
 			headCountKV:        32,
+			isEmbeddingModel:   false,
 			expected:           131072000, // Rounded up to nearest multiple of 64
+		},
+		{
+			name:               "embedding model with q4_0 (should default to f16)",
+			cacheType:          "q4_0",
+			numCtx:             1024,
+			blockCount:         32,
+			embeddingHeadCount: 32,
+			headCountKV:        32,
+			isEmbeddingModel:   true,
+			expected:           67108864, // 64 MB (defaults to f16)
+		},
+		{
+			name:               "embedding model with f32",
+			cacheType:          "f32",
+			numCtx:             1024,
+			blockCount:         32,
+			embeddingHeadCount: 32,
+			headCountKV:        32,
+			isEmbeddingModel:   true,
+			expected:           134217728, // 128 MB
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := estimateKvCacheSize(tt.cacheType, tt.numCtx, tt.blockCount, tt.embeddingHeadCount, tt.headCountKV)
+			result := estimateKvCacheSize(tt.cacheType, tt.numCtx, tt.blockCount, tt.embeddingHeadCount, tt.headCountKV, tt.isEmbeddingModel)
 			assert.Equal(t, tt.expected, result, "Estimated KV cache size does not match expected value")
 		})
 	}

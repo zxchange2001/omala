@@ -116,9 +116,15 @@ func EstimateGPULayers(gpus []gpu.GpuInfo, ggml *GGML, projectors []string, opts
 		slog.Warn("model missing blk.0 layer size")
 	}
 
+	// Check if the model is an embedding model
+	isEmbeddingModel := false
+	if _, ok := ggml.KV()[fmt.Sprintf("%s.pooling_type", ggml.KV().Architecture())]; ok {
+		isEmbeddingModel = true
+	}
+
 	// Estimate the memory required for K and V caches separately as they can have different quantization types
-	kSize := estimateKvCacheSize(envconfig.CacheTypeK(), uint64(opts.NumCtx), ggml.KV().BlockCount(), ggml.KV().EmbeddingHeadCountK(), ggml.KV().HeadCountKV())
-	vSize := estimateKvCacheSize(envconfig.CacheTypeV(), uint64(opts.NumCtx), ggml.KV().BlockCount(), ggml.KV().EmbeddingHeadCountV(), ggml.KV().HeadCountKV())
+	kSize := estimateKvCacheSize(envconfig.CacheTypeK(), uint64(opts.NumCtx), ggml.KV().BlockCount(), ggml.KV().EmbeddingHeadCountK(), ggml.KV().HeadCountKV(), isEmbeddingModel)
+	vSize := estimateKvCacheSize(envconfig.CacheTypeV(), uint64(opts.NumCtx), ggml.KV().BlockCount(), ggml.KV().EmbeddingHeadCountV(), ggml.KV().HeadCountKV(), isEmbeddingModel)
 	kv := kSize + vSize
 
 	// KV is proportional to the number of layers
@@ -358,8 +364,12 @@ func (m MemoryEstimate) log() {
 }
 
 // estimateKvCacheSize determines the memory required for K or V cache based on the quantization type
-func estimateKvCacheSize(cacheType string, numCtx, blockCount, embeddingHeadCount, headCountKV uint64) uint64 {
+func estimateKvCacheSize(cacheType string, numCtx, blockCount, embeddingHeadCount, headCountKV uint64, isEmbeddingModel bool) uint64 {
 	var bytesPerElement float64
+
+	if isEmbeddingModel && cacheType != "f16" && cacheType != "f32" {
+		cacheType = "f16" // Default to f16 for embedding models if an unsupported type is specified
+	}
 
 	switch cacheType {
 	case "f32", "fp32":

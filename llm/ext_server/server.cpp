@@ -1271,8 +1271,61 @@ struct llama_server_context
         }
     }
 
-    // for multiple images processing
-    bool ingest_images(server_slot &slot, int n_batch)
+    // 1 image only
+    bool prepare_pali(server_slot &slot, int n_batch)
+    {
+        int n_past = 0;
+        int image_idx = 0;
+        slot_image &img = slot.images[image_idx];
+
+        // rescale image embeddings
+        float *data = img.image_embedding;
+        for (int i = 0; i < 2048 * 256; i++)
+        {
+            data[i] = data[i] / sqrt(2048);
+        }
+        set_image_embeds(ctx, data);
+
+        // generate user_prompt -> this should contain image tokens prepended and a new line appended:
+        // batch.n_tokens += (int)slot.images.size() * llama_n_embd(model);
+        std::vector<llama_token> tokens;
+
+        for (int i = 0; i < (int)slot.images.size() * 256; i++)
+        {
+            tokens.push_back(257152);
+        }
+
+        tokens.push_back(2);
+
+        // move prefix prompt behind image tokens
+        for (int i = 0; i < batch.n_tokens; i++)
+        {
+            tokens.push_back(batch.token[i]);
+        }
+
+        llama_batch_clear(batch);
+        for (int i = 0; i < (int)tokens.size(); ++i)
+        {
+            llama_batch_add(batch, tokens[i], system_tokens.size() + slot.n_past, {slot.id}, true);
+            slot.n_past += 1;
+        }
+
+        // append prefix of next image
+        const auto json_prompt = slot.params.input_suffix;
+
+        std::vector<llama_token> append_tokens = tokenize(json_prompt, false); // has next image
+        append_tokens.push_back(108);
+
+        for (int i = 0; i < (int)append_tokens.size(); ++i)
+        {
+            llama_batch_add(batch, append_tokens[i], system_tokens.size() + slot.n_past, {slot.id}, true);
+            slot.n_past += 1;
+        }
+        llama_set_causal_attn(ctx, false);
+        return true;
+    }
+
+    bool process_llava(server_slot &slot, int n_batch)
     {
         int image_idx = 0;
 
@@ -1347,6 +1400,21 @@ struct llama_server_context
         }
 
         return true;
+    }
+
+    // for multiple images processing based on model architecture
+    bool ingest_images(server_slot &slot, int n_batch)
+    {
+        switch (llama_get_architecture(model))
+        {
+        case 0:
+            return process_llava(slot, n_batch);
+        case 25:
+            return prepare_pali(slot, n_batch);
+        default:
+            LOG_TEE("%s : failed to retrieve model architecture\n", __func__);
+            return false;
+        }
     }
 
     void request_cancel(int task_id)
@@ -1916,6 +1984,7 @@ struct llama_server_context
             };
 
             const int ret = llama_decode(ctx, batch_view);
+            llama_set_causal_attn(ctx, true);
 
             if (ret != 0)
             {

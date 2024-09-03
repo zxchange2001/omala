@@ -81,46 +81,6 @@ func LoadModel(model string, maxArraySize int) (*GGML, error) {
 	return ggml, err
 }
 
-// setCacheTypeParams sets the K/V cache type parameters if specified
-func setCacheTypeParams(params *[]string, flashAttnEnabled bool, opts api.Options) {
-	// if the cache types are both empty and opts.F16KV is not set, don't set any cache types
-	if envconfig.CacheTypeK() == "" && envconfig.CacheTypeV() == "" && !opts.F16KV {
-		return
-	}
-
-	// K/V cache quantization types supported by llama.cpp server
-	validKVCacheTypes := map[string]bool{
-		"f16": true, "f32": true, "q8_0": true, "q4_0": true,
-	}
-
-	setCacheTypeParam := func(paramName, cacheType string) {
-		if !validKVCacheTypes[cacheType] {
-			if cacheType != "" {
-				slog.Warn("invalid cache type", "param", paramName, "type", cacheType)
-			}
-			return
-		}
-
-		if cacheType == "f16" || cacheType == "f32" {
-			*params = append(*params, paramName, cacheType)
-			slog.Debug("Setting cache type", "param", paramName, "type", cacheType)
-		} else if flashAttnEnabled {
-			*params = append(*params, paramName, cacheType)
-			slog.Debug("Setting cache type", "param", paramName, "type", cacheType)
-		} else {
-			slog.Warn("requested cache type requires flash attention to be enabled, ignoring",
-				"param", paramName, "type", cacheType, "flash_attention", flashAttnEnabled)
-			// Fallback to default f16
-			*params = append(*params, paramName, "f16")
-			slog.Debug("Falling back to default cache type", "param", paramName, "type", "f16")
-		}
-	}
-
-	// Determine cache types, prioritizing parameter options and set cache type parameters
-	setCacheTypeParam("--cache-type-k", envconfig.CacheTypeK())
-	setCacheTypeParam("--cache-type-v", envconfig.CacheTypeV())
-}
-
 // NewLlamaServer will run a server for the given GPUs
 // The gpu list must be a single family.
 func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, projectors []string, opts api.Options, numParallel int) (LlamaServer, error) {
@@ -280,11 +240,46 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 		}
 	}
 
+	validKVCacheTypes := map[string]bool{
+		"f16": true, "f32": true, "q8_0": true, "q4_0": true,
+	}
+
+	// Function to set cache type parameter
+	setCacheTypeParam := func(paramName, cacheType string) {
+		if cacheType == "" {
+			return
+		}
+
+		// Check if the cache type is valid
+		if !validKVCacheTypes[cacheType] {
+			slog.Warn("invalid cache type", "param", paramName, "type", cacheType)
+			return
+		}
+
+		// Allow f16 and f32 even when Flash Attention is not enabled
+		if flashAttnEnabled || cacheType == "f16" || cacheType == "f32" {
+			params = append(params, paramName, cacheType)
+			slog.Debug("Setting cache type", "param", paramName, "type", cacheType)
+		} else {
+			slog.Warn("requested cache type requires flash attention to be enabled, ignoring",
+				"param", paramName, "type", cacheType, "flash_attention", flashAttnEnabled)
+		}
+	}
+
+	cacheTypeK := envconfig.CacheTypeK()
+	cacheTypeV := envconfig.CacheTypeV()
+
 	if flashAttnEnabled {
 		params = append(params, "--flash-attn")
 	}
 
-	setCacheTypeParams(&params, flashAttnEnabled, opts)
+	if cacheTypeK != "" {
+		setCacheTypeParam("--cache-type-k", cacheTypeK)
+	}
+
+	if cacheTypeV != "" {
+		setCacheTypeParam("--cache-type-v", cacheTypeV)
+	}
 
 	// Windows CUDA should not use mmap for best performance
 	// Linux  with a model larger than free space, mmap leads to thrashing

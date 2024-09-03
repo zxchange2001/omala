@@ -151,7 +151,7 @@ Refer to the section [above](#how-do-i-configure-ollama-server) for how to set e
 
 Ollama runs an HTTP server and can be exposed using a proxy server such as Nginx. To do so, configure the proxy to forward requests and optionally set required headers (if not exposing Ollama on the network). For example, with Nginx:
 
-```
+```nginx
 server {
     listen 80;
     server_name example.com;  # Replace with your domain or IP
@@ -164,7 +164,7 @@ server {
 
 ## How can I use Ollama with ngrok?
 
-Ollama can be accessed using a range of tools for tunneling tools. For example with Ngrok:
+Ollama can be accessed using a range of tools for tunnelling tools. For example with Ngrok:
 
 ```shell
 ngrok http 11434 --host-header="localhost:11434"
@@ -281,7 +281,13 @@ Note: Windows with Radeon GPUs currently default to 1 model maximum due to limit
 
 ## How does Ollama load models on multiple GPUs?
 
-Installing multiple GPUs of the same brand can be a great way to increase your available VRAM to load larger models.  When you load a new model, Ollama evaluates the required VRAM for the model against what is currently available.  If the model will entirely fit on any single GPU, Ollama will load the model on that GPU.  This typically provides the best performance as it reduces the amount of data transfering across the PCI bus during inference.  If the model does not fit entirely on one GPU, then it will be spread across all the available GPUs.
+Installing multiple GPUs of the same brand can be a great way to increase your available VRAM to load larger models.  When you load a new model, Ollama evaluates the required VRAM for the model against what is currently available.  If the model will entirely fit on any single GPU, Ollama will load the model on that GPU.  This typically provides the best performance as it reduces the amount of data transferring across the PCI bus during inference.  If the model does not fit entirely on one GPU, then it will be spread across all the available GPUs.
+
+## How can I enable Flash Attention?
+
+Flash Attention is a feature of most (but not all) modern models that can significantly reduce memory usage as the context size grows.  To enable Flash Attention, set the `OLLAMA_FLASH_ATTENTION` environment variable to `1` when starting the Ollama server.
+
+> Note: If you're using an uncommon quantization type with CUDA, you may benefit from build Ollama with `LLAMA_CUDA_FA_ALL_QUANTS=1` to make llama.cpp build all flash attention quantization types.
 
 ## How can I set the quantization type for the K/V cache?
 
@@ -298,10 +304,8 @@ While there are [a number of quantization types available](https://github.com/gg
 
 - `f32` - full precision and memory usage.
 - `f16` - high precision and memory usage (default).
-- `q8_0` - 8-bit quantization, uses approximately 1/2 the memory of `f16` with a very small loss in precision.
-- `q4_0` - 4-bit quantization, uses approximately 1/4 the memory of `f16` with a small-medium loss in precision.
-
-If you're using an uncommon quant type, you may benefit from build Ollama with `LLAMA_CUDA_FA_ALL_QUANTS=1` to make llama.cpp build all flash attention quantization types.
+- `q8_0` - 8-bit quantization, uses approximately 1/2 the memory of `f16` with a very small loss in precision, this usually has no noticeable impact on the model's quality.
+- `q4_0` - 4-bit quantization, uses approximately 1/4 the memory of `f16` with a small-medium loss in precision that may be more noticeable at higher context sizes.
 
 How much the cache quantization impacts the model's response quality will depend on the model and the task.  Models have a high GQA count (e.g. Qwen2) may see a larger impact on precision from quantization than models with a low GQA count.
 

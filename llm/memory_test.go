@@ -15,6 +15,8 @@ import (
 
 func TestEstimateGPULayers(t *testing.T) {
 	t.Setenv("OLLAMA_DEBUG", "1")
+	t.Setenv("OLLAMA_CACHE_TYPE_K", "")
+	t.Setenv("OLLAMA_CACHE_TYPE_V", "")
 
 	modelName := "dummy"
 	f, err := os.CreateTemp(t.TempDir(), modelName)
@@ -57,6 +59,7 @@ func TestEstimateGPULayers(t *testing.T) {
 	}
 	projectors := []string{}
 	opts := api.DefaultOptions()
+
 	t.Run("cpu", func(t *testing.T) {
 		estimate := EstimateGPULayers(gpus, ggml, projectors, opts)
 		assert.Equal(t, 0, estimate.Layers)
@@ -70,7 +73,7 @@ func TestEstimateGPULayers(t *testing.T) {
 	projectorSize := uint64(0)
 	memoryLayerOutput := uint64(4)
 
-	// Dual CUDA scenario with assymetry
+	// Dual CUDA scenario with asymmetry
 	gpuMinimumMemory := uint64(2048)
 	gpus = []gpu.GpuInfo{
 		{

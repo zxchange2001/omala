@@ -296,6 +296,7 @@ See the [API documentation](./docs/api.md) for all endpoints.
 - [OllamaSpring](https://github.com/CrazyNeil/OllamaSpring) (Ollama Client for macOS)
 - [LLocal.in](https://github.com/kartikm7/llocal) (Easy to use Electron Desktop Client for Ollama)
 - [Ollama with Google Mesop](https://github.com/rapidarchitect/ollama_mesop/) (Mesop Chat Client implementation with Ollama)
+- [Painting Droid](https://github.com/mateuszmigas/painting-droid) (Painting app with AI integrations)
 - [Kerlig AI](https://www.kerlig.com/) (AI writing assistant for macOS)
 - [AI Studio](https://github.com/MindWorkAI/AI-Studio)
 - [Sidellama](https://github.com/gyopak/sidellama) (browser-based LLM client)
@@ -303,6 +304,8 @@ See the [API documentation](./docs/api.md) for all endpoints.
 - [BoltAI for Mac](https://boltai.com) (AI Chat Client for Mac)
 - [Harbor](https://github.com/av/harbor) (Containerized LLM Toolkit with Ollama as default backend)
 - [Go-CREW](https://www.jonathanhecl.com/go-crew/) (Powerful Offline RAG in Golang)
+- [PartCAD](https://github.com/openvmp/partcad/) (CAD model generation with OpenSCAD and CadQuery)
+- [Ollama4j Web UI](https://github.com/ollama4j/ollama4j-web-ui) - Java-based Web UI for Ollama built with Vaadin, Spring Boot and Ollama4j
 
 ### Terminal
 
@@ -355,7 +358,7 @@ See the [API documentation](./docs/api.md) for all endpoints.
 - [Ollama for Ruby](https://github.com/gbaptista/ollama-ai)
 - [Ollama-rs for Rust](https://github.com/pepperoni21/ollama-rs)
 - [Ollama-hpp for C++](https://github.com/jmont-dev/ollama-hpp)
-- [Ollama4j for Java](https://github.com/amithkoujalgi/ollama4j)
+- [Ollama4j for Java](https://github.com/ollama4j/ollama4j)
 - [ModelFusion Typescript Library](https://modelfusion.dev/integration/model-provider/ollama)
 - [OllamaKit for Swift](https://github.com/kevinhermawan/OllamaKit)
 - [Ollama for Dart](https://github.com/breitburg/dart-ollama)

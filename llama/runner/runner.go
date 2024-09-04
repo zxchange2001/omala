@@ -626,7 +626,7 @@ func (s *Server) loadModel(
 
 	s.model = llama.LoadModelFromFile(mpath, params)
 
-	ctxParams := llama.NewContextParams(kvSize, threads, flashAttention)
+	ctxParams := llama.NewContextParams(kvSize, s.batchSize, s.parallel, threads, flashAttention)
 	s.lc = llama.NewContextWithModel(s.model, ctxParams)
 
 	if lpath != "" {
@@ -642,6 +642,8 @@ func (s *Server) loadModel(
 
 	if ppath != "" {
 		s.cc = llama.NewClipContext(ppath)
+		// TODO (jessegross): Vision model support
+		panic("Vision models are not yet supported")
 	}
 
 	s.status = ServerStatusReady

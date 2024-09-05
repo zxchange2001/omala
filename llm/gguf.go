@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"golang.org/x/exp/maps"
+
+	"github.com/ollama/ollama/api"
 )
 
 type containerGGUF struct {
@@ -506,7 +508,7 @@ func writeGGUFArray[S ~[]E, E any](w io.Writer, t uint32, s S) error {
 	return binary.Write(w, binary.LittleEndian, s)
 }
 
-func WriteGGUF(ws io.WriteSeeker, kv KV, ts []Tensor) error {
+func WriteGGUF(ws io.WriteSeeker, kv KV, ts []Tensor, fn func(api.ProgressResponse)) error {
 	if err := binary.Write(ws, binary.LittleEndian, []byte("GGUF")); err != nil {
 		return err
 	}
@@ -552,7 +554,10 @@ func WriteGGUF(ws io.WriteSeeker, kv KV, ts []Tensor) error {
 	}
 
 	var alignment int64 = 32
-	for _, t := range ts {
+	for i, t := range ts {
+		fn(api.ProgressResponse{
+			Status: fmt.Sprintf("converting model %d%%", 100*(i+1)/len(ts)),
+		})
 		if err := ggufWriteTensor(ws, t, alignment); err != nil {
 			return err
 		}

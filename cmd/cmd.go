@@ -1423,6 +1423,8 @@ func NewCLI() *cobra.Command {
 				envVars["OLLAMA_CACHE_TYPE_K"],
 				envVars["OLLAMA_CACHE_TYPE_V"],
 				envVars["OLLAMA_LLM_LIBRARY"],
+				envVars["OLLAMA_GPU_OVERHEAD"],
+				envVars["OLLAMA_LOAD_TIMEOUT"],
 			})
 		default:
 			appendEnvDocs(cmd, envs)

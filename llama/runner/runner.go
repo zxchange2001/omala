@@ -671,8 +671,14 @@ func main() {
 	_ = flag.Bool("embedding", false, "enable embedding vector output (default: disabled)")
 	_ = flag.Bool("log-disable", false, "disables logging to a file")
 	_ = flag.Bool("memory-f32", false, "use f32 instead of f16 for memory key+value (default: disabled) not recommended: doubles context memory required and no measurable increase in quality")
+	// Expose requirements as a JSON output to stdout
+	requirements := flag.Bool("requirements", false, "print json requirement information")
 
 	flag.Parse()
+	if *requirements {
+		printRequirements(os.Stdout)
+		return
+	}
 	level := slog.LevelInfo
 	if *verbose {
 		level = slog.LevelDebug

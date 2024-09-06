@@ -45,6 +45,8 @@ EOF
     dnf install -y git \
         gcc-toolset-10-gcc-10.2.1-8.2.el8 \
         gcc-toolset-10-gcc-c++-10.2.1-8.2.el8 \
+        findutils \
+        yum-utils \
         pigz
 else
     echo "ERROR Unexpected distro"

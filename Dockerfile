@@ -5,6 +5,7 @@ ARG CUDA_V11_ARCHITECTURES="50;52;53;60;61;62;70;72;75;80;86"
 ARG CUDA_VERSION_12=12.4.0
 ARG CUDA_V12_ARCHITECTURES="60;61;62;70;72;75;80;86;87;89;90;90a"
 ARG ROCM_VERSION=6.1.2
+ARG ASCEND_VERSION=8.0.rc1-910b-openeuler20.03
 
 # Copy the minimal context we need to run the generate scripts
 FROM scratch AS llm-code
@@ -98,6 +99,16 @@ RUN --mount=type=cache,target=/root/.ccache \
 RUN mkdir -p ../../dist/linux-amd64-rocm/lib/ollama && \
     (cd /opt/rocm/lib && tar cf - rocblas/library) | (cd ../../dist/linux-amd64-rocm/lib/ollama && tar xf - )
 
+FROM --platform=linux/arm64 cosdt/cann:${ASCEND_VERSION} AS ascend-build-arm64
+ARG CMAKE_VERSION
+COPY ./scripts/rh_linux_deps.sh /
+RUN CMAKE_VERSION=${CMAKE_VERSION} sh /rh_linux_deps.sh
+ENV PATH /opt/rh/gcc-toolset-10/root/usr/bin:$PATH
+COPY --from=llm-code / /go/src/github.com/ollama/ollama/
+WORKDIR /go/src/github.com/ollama/ollama/llm/generate
+ARG CGO_CFLAGS
+RUN OLLAMA_SKIP_STATIC_GENERATE=1 OLLAMA_SKIP_CPU_GENERATE=1 sh gen_linux.sh
+
 FROM --platform=linux/amd64 centos:7 AS cpu-builder-amd64
 ARG CMAKE_VERSION
 ARG GOLANG_VERSION
@@ -173,6 +184,7 @@ COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/dist/ di
 COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
 COPY --from=cuda-12-build-server-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
 COPY --from=cuda-12-build-server-arm64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=ascend-build-arm64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
 ARG GOFLAGS
 ARG CGO_CFLAGS
 RUN --mount=type=cache,target=/root/.ccache \

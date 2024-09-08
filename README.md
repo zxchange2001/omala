@@ -336,6 +336,7 @@ See the [API documentation](./docs/api.md) for all endpoints.
 - [podman-ollama](https://github.com/ericcurtin/podman-ollama)
 - [gollama](https://github.com/sammcj/gollama)
 - [Ollama eBook Summary](https://github.com/cognitivetech/ollama-ebook-summary/)
+- [x-cmd ollama](https://x-cmd.com/mod/ollama)
 
 ### Apple Vision Pro
 - [Enchanted](https://github.com/AugustDev/enchanted)

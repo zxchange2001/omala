@@ -5,6 +5,8 @@ ARG CUDA_V11_ARCHITECTURES="50;52;53;60;61;62;70;72;75;80;86"
 ARG CUDA_VERSION_12=12.4.0
 ARG CUDA_V12_ARCHITECTURES="60;61;62;70;72;75;80;86;87;89;90;90a"
 ARG ROCM_VERSION=6.1.2
+ARG JETPACK_6=r36.2.0
+ARG JETPACK_5=r35.4.1
 
 # Copy the minimal context we need to run the generate scripts
 FROM scratch AS llm-code
@@ -81,6 +83,39 @@ RUN --mount=type=cache,target=/root/.ccache \
     OLLAMA_CUSTOM_CUDA_DEFS="-DGGML_CUDA_USE_GRAPHS=on" \
     bash gen_linux.sh
 
+FROM --platform=linux/arm64 nvcr.io/nvidia/l4t-jetpack:${JETPACK_6} AS cuda-build-jetpack6-arm64
+ARG CMAKE_VERSION
+RUN apt-get update && apt-get install -y git curl && \
+    curl -s -L https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz | tar -zx -C /usr --strip-components 1
+COPY --from=llm-code / /go/src/github.com/ollama/ollama/
+WORKDIR /go/src/github.com/ollama/ollama/llm/generate
+ARG CGO_CFLAGS
+ENV GOARCH arm64
+ENV LIBRARY_PATH /usr/local/cuda/lib64/stubs
+RUN --mount=type=cache,target=/root/.ccache \
+    OLLAMA_SKIP_STATIC_GENERATE=1 \
+    OLLAMA_SKIP_CPU_GENERATE=1 \
+    CUDA_VARIANT="_jetpack6" \
+    CUDA_DIST_DIR="/go/src/github.com/ollama/ollama/dist/linux-arm64-jetpack6/lib/ollama/cuda_jetpack6" \
+    CMAKE_CUDA_ARCHITECTURES="87" \
+    bash gen_linux.sh
+
+FROM --platform=linux/arm64 nvcr.io/nvidia/l4t-jetpack:${JETPACK_5} AS cuda-build-jetpack5-arm64
+ARG CMAKE_VERSION
+RUN apt-get update && apt-get install -y git curl && \
+    curl -s -L https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz | tar -zx -C /usr --strip-components 1
+COPY --from=llm-code / /go/src/github.com/ollama/ollama/
+WORKDIR /go/src/github.com/ollama/ollama/llm/generate
+ARG CGO_CFLAGS
+ENV GOARCH arm64
+ENV LIBRARY_PATH /usr/local/cuda/lib64/stubs
+RUN --mount=type=cache,target=/root/.ccache \
+    OLLAMA_SKIP_STATIC_GENERATE=1 \
+    OLLAMA_SKIP_CPU_GENERATE=1 \
+    CUDA_VARIANT="_jetpack5" \
+    CUDA_DIST_DIR="/go/src/github.com/ollama/ollama/dist/linux-arm64-jetpack5/lib/ollama/cuda_jetpack5" \
+    CMAKE_CUDA_ARCHITECTURES="72;87" \
+    bash gen_linux.sh
 
 FROM --platform=linux/amd64 rocm/dev-centos-7:${ROCM_VERSION}-complete AS rocm-build-amd64
 ARG CMAKE_VERSION
@@ -143,64 +178,119 @@ RUN --mount=type=cache,target=/root/.ccache \
     OLLAMA_SKIP_STATIC_GENERATE=1 OLLAMA_CPU_TARGET="cpu" bash gen_linux.sh
 
 
-# Intermediate stage used for ./scripts/build_linux.sh
+# Intermediate stages used for ./scripts/build_linux.sh
 FROM --platform=linux/amd64 cpu-build-amd64 AS build-amd64
 ENV CGO_ENABLED 1
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
-COPY --from=static-build-amd64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
-COPY --from=cpu_avx-build-amd64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
-COPY --from=cpu_avx2-build-amd64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=static-build-amd64 /go/src/github.com/ollama/ollama/llm/build/ llm/build/
+COPY --from=cpu_avx-build-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
+COPY --from=cpu_avx2-build-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 COPY --from=cuda-11-build-amd64 /go/src/github.com/ollama/ollama/dist/ dist/
-COPY --from=cuda-11-build-amd64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=cuda-11-build-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 COPY --from=cuda-12-build-amd64 /go/src/github.com/ollama/ollama/dist/ dist/
-COPY --from=cuda-12-build-amd64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=cuda-12-build-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 COPY --from=rocm-build-amd64 /go/src/github.com/ollama/ollama/dist/ dist/
-COPY --from=rocm-build-amd64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=rocm-build-amd64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 ARG GOFLAGS
 ARG CGO_CFLAGS
 RUN --mount=type=cache,target=/root/.ccache \
     go build -trimpath -o dist/linux-amd64/bin/ollama .
+RUN cd dist/linux-$GOARCH && \
+    tar --exclude runners -cf - . | pigz --best > ../ollama-linux-$GOARCH.tgz
+RUN cd dist/linux-$GOARCH-rocm && \
+    tar -cf - . | pigz --best > ../ollama-linux-$GOARCH-rocm.tgz
 
-# Intermediate stage used for ./scripts/build_linux.sh
 FROM --platform=linux/arm64 cpu-build-arm64 AS build-arm64
 ENV CGO_ENABLED 1
 ARG GOLANG_VERSION
 WORKDIR /go/src/github.com/ollama/ollama
 COPY . .
-COPY --from=static-build-arm64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=static-build-arm64 /go/src/github.com/ollama/ollama/llm/build/ llm/build/
 COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
-COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
 COPY --from=cuda-12-build-server-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
-COPY --from=cuda-12-build-server-arm64 /go/src/github.com/ollama/ollama/llm/build/linux/ llm/build/linux/
+COPY --from=cuda-12-build-server-arm64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
+## arm binary += 381M
+COPY --from=cuda-build-jetpack6-arm64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
+COPY --from=cuda-build-jetpack6-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
+## arm binary += 330M
+COPY --from=cuda-build-jetpack5-arm64 /go/src/github.com/ollama/ollama/payloads/build/ payloads/build/
+COPY --from=cuda-build-jetpack5-arm64 /go/src/github.com/ollama/ollama/dist/ dist/
 ARG GOFLAGS
 ARG CGO_CFLAGS
 RUN --mount=type=cache,target=/root/.ccache \
     go build -trimpath -o dist/linux-arm64/bin/ollama .
+RUN cd dist/linux-$GOARCH && \
+    tar --exclude runners -cf - . | pigz --best > ../ollama-linux-$GOARCH.tgz
+RUN cd dist/linux-$GOARCH-jetpack5 && \
+    tar -cf - . | pigz --best > ../ollama-linux-$GOARCH-jetpack5.tgz
+RUN cd dist/linux-$GOARCH-jetpack6 && \
+    tar -cf - . | pigz --best > ../ollama-linux-$GOARCH-jetpack6.tgz
 
-# Strip out ROCm dependencies to keep the primary image lean
-FROM --platform=linux/amd64 ubuntu:22.04 as amd64-libs-without-rocm
-COPY --from=build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /scratch/
-RUN cd /scratch/ollama/ && rm -rf rocblas libamd* libdrm* libroc* libhip* libhsa*
+FROM --platform=linux/amd64 scratch AS dist-amd64
+COPY --from=build-amd64 /go/src/github.com/ollama/ollama/dist/ollama-linux-*.tgz /
+FROM --platform=linux/arm64 scratch AS dist-arm64
+COPY --from=build-arm64 /go/src/github.com/ollama/ollama/dist/ollama-linux-*.tgz /
+FROM dist-$TARGETARCH as dist
 
-# Runtime stages
+
+# Optimized container images do not cary nested payloads
+FROM --platform=linux/amd64 static-build-amd64 as container-build-amd64
+WORKDIR /go/src/github.com/ollama/ollama
+COPY . .
+ARG GOFLAGS
+ARG CGO_CFLAGS
+RUN --mount=type=cache,target=/root/.ccache \
+    mkdir -p payloads/build/linux/amd64/NO_PAYLOAD/ && \
+    touch payloads/build/linux/amd64/NO_PAYLOAD/NO_PAYLOAD && \
+    go build -trimpath -o dist/linux-amd64/bin/ollama .
+
+FROM --platform=linux/arm64 static-build-arm64 as container-build-arm64
+WORKDIR /go/src/github.com/ollama/ollama
+COPY . .
+ARG GOFLAGS
+ARG CGO_CFLAGS
+RUN --mount=type=cache,target=/root/.ccache \
+    mkdir -p payloads/build/linux/arm64/NO_PAYLOAD/ && \
+    touch payloads/build/linux/arm64/NO_PAYLOAD/NO_PAYLOAD && \
+    go build -trimpath -o dist/linux-arm64/bin/ollama .
+
 FROM --platform=linux/amd64 ubuntu:22.04 as runtime-amd64
-COPY --from=amd64-libs-without-rocm /scratch/ /lib/
-RUN apt-get update && apt-get install -y ca-certificates && \
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-COPY --from=build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/bin/ /bin/
+COPY --from=container-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/bin/ /bin/
+COPY --from=cpu-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
+COPY --from=cpu_avx-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
+COPY --from=cpu_avx2-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
+COPY --from=cuda-11-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
+COPY --from=cuda-12-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
 
 FROM --platform=linux/arm64 ubuntu:22.04 as runtime-arm64
-COPY --from=build-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/lib/ /lib/
-RUN apt-get update && apt-get install -y ca-certificates && \
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-COPY --from=build-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/bin/ /bin/
+COPY --from=container-build-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/bin/ /bin/
+COPY --from=cpu-build-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/lib/ /lib/
+COPY --from=cuda-11-build-server-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/lib/ /lib/
+COPY --from=cuda-12-build-server-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/lib/ /lib/
+COPY --from=cuda-build-jetpack5-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/lib/ /lib/
+COPY --from=cuda-build-jetpack6-arm64 /go/src/github.com/ollama/ollama/dist/linux-arm64/lib/ /lib/
 
-# Radeon images are much larger so we keep it distinct from the CPU/CUDA image
-FROM --platform=linux/amd64 rocm/dev-centos-7:${ROCM_VERSION}-complete as runtime-rocm
-RUN update-pciids
-COPY --from=build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/bin/ /bin/
-RUN ln -s /opt/rocm/lib /lib/ollama
+# ROCm libraries larger so we keep it distinct from the CPU/CUDA image
+FROM --platform=linux/amd64 ubuntu:22.04 as runtime-rocm
+# Frontload the rocm libraries which are large, and rarely change to increase chance of a common layer
+# across releases
+COPY --from=rocm-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64-rocm/lib/ /lib/
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY --from=container-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/bin/ /bin/
+COPY --from=cpu-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
+COPY --from=cpu_avx-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
+COPY --from=cpu_avx2-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
+COPY --from=rocm-build-amd64 /go/src/github.com/ollama/ollama/dist/linux-amd64/lib/ /lib/
 EXPOSE 11434
 ENV OLLAMA_HOST 0.0.0.0
 
